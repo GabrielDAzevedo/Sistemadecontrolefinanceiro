@@ -61,7 +61,7 @@ const DB = {
 };
 
 // ==========================================
-// 3. CLOUD SYNC (MOTOR DO GOOGLE DRIVE)
+// 3. CLOUD SYNC (MOTOR REFORÇADO PARA PERSISTÊNCIA)
 // ==========================================
 const Cloud = {
     saveTimeout: null,
@@ -69,56 +69,74 @@ const Cloud = {
     init() {
         if (!window.gapi || !window.google) return;
 
-        gapi.load('client', () => {
-            gapi.client.init({
+        gapi.load('client', async () => {
+            await gapi.client.init({
                 apiKey: GOOGLE_API.API_KEY,
                 discoveryDocs: [GOOGLE_API.DISCOVERY_DOC]
-            }).then(() => {
-                GOOGLE_API.isLoaded = true;
-                
-                // PERSISTÊNCIA: Busca no localStorage em vez de sessionStorage
-                const savedToken = localStorage.getItem('sf_google_token');
-                if (savedToken) {
-                    gapi.client.setToken({ access_token: savedToken });
-                    this.onAuthenticated();
-                }
             });
+            GOOGLE_API.isLoaded = true;
+
+            // Busca o token no localStorage (Persistente)
+            const savedToken = localStorage.getItem('sf_google_token');
+            
+            if (savedToken) {
+                // Injeta o token e tenta realizar uma chamada leve para ver se ainda é válido
+                gapi.client.setToken({ access_token: savedToken });
+                
+                try {
+                    // Tenta listar a pasta apenas para validar a conexão
+                    await this.syncNow();
+                } catch (e) {
+                    console.warn("Token expirado ou inválido, limpando sessão.");
+                    this.logout();
+                }
+            }
         });
 
+        // Configura o cliente de Token
         GOOGLE_API.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_API.CLIENT_ID,
             scope: GOOGLE_API.SCOPES,
-            callback: (res) => { if (res.access_token) this.onAuthenticated(); }
+            callback: async (tokenResponse) => {
+                if (tokenResponse && tokenResponse.access_token) {
+                    localStorage.setItem('sf_google_token', tokenResponse.access_token); // Grava permanentemente
+                    this.onAuthenticated();
+                }
+            }
         });
 
-        document.getElementById('btn-google-login')?.addEventListener('click', () => GOOGLE_API.tokenClient.requestAccessToken());
+        document.getElementById('btn-google-login')?.addEventListener('click', () => {
+            // Solicita um novo token se o anterior sumiu[cite: 2]
+            GOOGLE_API.tokenClient.requestAccessToken({ prompt: 'none' }); 
+            // Se o prompt 'none' falhar (user deslogado), chame sem parâmetros no catch
+        });
         document.getElementById('btn-force-sync')?.addEventListener('click', () => this.syncNow());
         document.getElementById('btn-logout')?.addEventListener('click', () => this.logout());
     },
 
     onAuthenticated() {
-        const token = gapi.client.getToken().access_token;
-        localStorage.setItem('sf_google_token', token); // Salva para persistir após fechar
-        
         document.getElementById('btn-google-login')?.classList.add('hidden');
         document.getElementById('cloud-controls')?.classList.remove('hidden');
         this.syncNow();
     },
 
     logout() {
-        google.accounts.oauth2.revoke(localStorage.getItem('sf_google_token'), () => {
-            gapi.client.setToken('');
-            localStorage.removeItem('sf_google_token');
-            document.getElementById('btn-google-login')?.classList.remove('hidden');
-            document.getElementById('cloud-controls')?.classList.add('hidden');
-            UI.showToast("Desconectado", "success");
-        });
+        const token = localStorage.getItem('sf_google_token');
+        if (token) {
+            google.accounts.oauth2.revoke(token, () => {
+                gapi.client.setToken('');
+                localStorage.removeItem('sf_google_token'); // Limpa o persistente[cite: 2]
+                document.getElementById('btn-google-login')?.classList.remove('hidden');
+                document.getElementById('cloud-controls')?.classList.add('hidden');
+                UI.showToast("Desconectado com sucesso", "success");
+            });
+        }
     },
-
-    // Funções getOrCreateFolder, syncNow e uploadToDrive permanecem iguais à source 2...
-    async getOrCreateFolder() { /* ... código da source 2 ... */ },
-    async syncNow() { /* ... código da source 2 ... */ },
-    async uploadToDrive(isSilent = false) { /* ... código da source 2 ... */ }
+    
+    // Funções getOrCreateFolder, syncNow e uploadToDrive permanecem iguais[cite: 2]
+    async getOrCreateFolder() { /* ... código anterior ... */ },
+    async syncNow() { /* ... código anterior ... */ },
+    async uploadToDrive(isSilent = false) { /* ... código anterior ... */ }
 };
 
 // ==========================================
