@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Sistema Financeiro</title>
+    
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <link rel="apple-touch-icon" href="favicon.png">
+    <link rel="icon" href="favicon.png">
+    
+    <!-- Fontes e Ícones -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Bibliotecas (Gráficos e Google API) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <!-- Modal de Carregamento para Nuvem -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p id="loading-text">Sincronizando com o Google Drive...</p>
+    </div>
+
+    <div class="app-container">
+        
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-circle wallet-hover-container">
+                    <i class="fa-solid fa-wallet"></i>
+                    <div class="wallet-tooltip">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span class="tooltip-label">Conta Corrente</span>
+                            <i class="fa-solid fa-pen" id="btn-edit-cc" style="font-size: 10px; cursor: pointer; color: #94a3b8; padding: 2px;" title="Ajustar Saldo"></i>
+                        </div>
+                        <span class="tooltip-value" id="valor-conta-corrente">R$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+            <nav>
+                <button class="nav-btn active" data-target="dashboard" title="Dashboard">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </button>
+                <button class="nav-btn" data-target="rendimentos" title="Renda Fixa e Caixinhas">
+                    <i class="fa-solid fa-arrow-trend-up"></i>
+                </button>
+                <button class="nav-btn" data-target="renda-variavel" title="Renda Variável (Ações/FIIs/Cripto)">
+                    <i class="fa-solid fa-chart-line"></i>
+                </button>
+                <button class="nav-btn" data-target="descritivos" title="Descritivos Financeiros">
+                    <i class="fa-solid fa-list-check"></i>
+                </button>
+                <button class="nav-btn" data-target="emprestimos" title="Empréstimos Concedidos">
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                </button>
+                <button class="nav-btn" data-target="configuracoes" title="Configurações e Nuvem">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </nav>
+            <div class="sidebar-footer" style="margin-top: auto; padding-bottom: 20px;">
+                <button class="nav-btn" id="btn-theme-toggle" title="Alternar Modo Escuro">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            
+            <button id="btn-theme-toggle-float" class="theme-toggle-btn" title="Alternar Modo Escuro">
+                <i class="fa-solid fa-moon"></i>
+            </button>
+
+            <div id="toast-container" class="toast-container"></div>
+
+            <section id="dashboard" class="tab-content active">
+                <header class="section-header">
+                    <h2>Visão Geral</h2>
+                    <p>Acompanhe sua evolução financeira de forma visual</p>
+                </header>
+                <div class="cards">
+                    <div class="card">
+                        <div class="card-icon"><i class="fa-solid fa-vault"></i></div>
+                        <h3>Patrimônio Acumulado</h3>
+                        <p id="patrimonio-valor">R$ 0,00</p>
+                        <div class="patrimonio-breakdown">
+                            <button class="dashboard-link" data-target="dashboard" title="Ir para Conta Corrente">
+                                C. Corrente: <span id="dash-cc">R$ 0</span>
+                            </button>
+                            <button class="dashboard-link" data-target="rendimentos" title="Ir para Caixinhas">
+                                Caixinhas: <span id="dash-caixinhas">R$ 0</span>
+                            </button>
+                            <button class="dashboard-link" data-target="emprestimos" title="Ir para Empréstimos">
+                                A Receber: <span id="dash-receber">R$ 0</span>
+                            </button>
+                            <button class="dashboard-link" data-target="renda-variavel" title="Ir para Renda Variável">
+                                Renda Variável: <span id="dash-rv">R$ 0</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card" style="position: relative;">
+                        <div class="card-icon"><i class="fa-solid fa-bullseye"></i></div>
+                        <h3>Progresso da Meta (R$ 100k)</h3>
+                        <div class="progress-bar">
+                            <div id="meta-fill" class="fill" style="width: 0%;"></div>
+                            <div class="marker" style="left: 10%;" title="10k"></div>
+                            <div class="marker" style="left: 25%;" title="25k"></div>
+                            <div class="marker" style="left: 50%;" title="50k"></div>
+                        </div>
+                        <p id="meta-texto" class="meta-text" style="margin-bottom: 8px;">0% concluído</p>
+                        <div class="meta-projecao" id="meta-projecao">
+                            <i class="fa-solid fa-rocket"></i> Calculando projeção baseada nos seus aportes...
+                        </div>
+                    </div>
+                    
+                    <div class="card summary-card">
+                        <div class="card-icon"><i class="fa-regular fa-calendar-check"></i></div>
+                        <div class="chart-header-actions" style="margin-bottom: 15px; position: relative; z-index: 1;">
+                            <h3 style="margin-bottom: 0;">Fechamento</h3>
+                            <div class="chart-filters" id="summary-period">
+                                <button class="btn-period" data-period="dia">Dia</button>
+                                <button class="btn-period active" data-period="mes">Mês</button>
+                            </div>
+                        </div>
+                        <div class="summary-details">
+                            <div class="summary-row"><span class="rv-label">Receitas</span><span id="mes-receitas" class="positive">R$ 0,00</span></div>
+                            <div class="summary-row"><span class="rv-label">Rendimentos Caixinha</span><span id="mes-rendimentos" class="positive">R$ 0,00</span></div>
+                            <div class="summary-row"><span class="rv-label">Aportes (Novos)</span><span id="mes-aportes" style="color:var(--primary); font-weight:600;">R$ 0,00</span></div>
+                            <div class="summary-row"><span class="rv-label">Despesas</span><span id="mes-despesas" class="negative">R$ 0,00</span></div>
+                            <hr style="border-color: var(--border-color); margin: 10px 0;">
+                            <div class="summary-row"><span class="rv-label" style="font-weight:600;">Evolução Líquida</span><span id="mes-balanco" style="font-weight:700;">R$ 0,00</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card" data-target="descritivos" title="Ir para Descritivos Financeiros">
+                        <div class="chart-header-actions">
+                            <h3>Evolução do Patrimônio</h3>
+                            <div class="chart-filters" id="chart-period">
+                                <button class="btn-period" data-days="7">7D</button>
+                                <button class="btn-period active" data-days="30">30D</button>
+                                <button class="btn-period" data-days="365">12M</button>
+                            </div>
+                        </div>
+                        <canvas id="lineChart"></canvas>
+                    </div>
+                    <div class="chart-card" data-target="renda-variavel" title="Ir para Renda Variável">
+                        <h3>Distribuição de Ativos</h3>
+                        <canvas id="donutChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section id="rendimentos" class="tab-content">
+                <header class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        <h2>Caixinhas e Renda Fixa</h2>
+                        <p>Adicione rendimentos (+) ou retiradas (-). A previsão usa a média de ganhos reais.</p>
+                    </div>
+                    <div class="total-yield-badge" title="Soma total dos rendimentos adicionados hoje">
+                        <span>Rendimento Hoje</span>
+                        <strong id="total-rendimento-dia" class="positive">R$ 0,00</strong>
+                    </div>
+                </header>
+                
+                <div class="cards" id="bancos-container">
+                    <!-- Nubank -->
+                    <div class="card rendimento-card expand-action">
+                        <div class="card-icon nubank-icon"><i class="fa-solid fa-building-columns"></i></div>
+                        <div class="rendimento-header">
+                            <h3>Nubank (Caixinha)</h3>
+                            <span class="taxa-badge">120% do CDI</span>
+                        </div>
+                        <div class="saldo-edit-container no-expand">
+                            <p id="saldo-nubank" class="saldo-texto">R$ 0,00</p>
+                            <div id="edit-box-nubank" class="edit-box hidden">
+                                <input type="number" id="input-saldo-nubank" class="saldo-input" step="0.01" placeholder="Novo Saldo">
+                            </div>
+                            <div id="yield-box-nubank" class="edit-box hidden">
+                                <input type="number" id="input-yield-nubank" class="saldo-input yield-input" step="0.01" placeholder="+ Rendimento">
+                            </div>
+                            <div id="withdraw-box-nubank" class="edit-box hidden">
+                                <input type="number" id="input-withdraw-nubank" class="saldo-input withdraw-input" step="0.01" placeholder="- Retirada">
+                            </div>
+                            <div class="action-buttons" id="actions-nubank">
+                                <button class="btn-action-small btn-edit-saldo" data-banco="nubank" title="Ajustar Saldo Manualmente"><i class="fa-solid fa-pen"></i></button>
+                                <button class="btn-action-small btn-add-yield" data-banco="nubank" title="Somar Rendimento do Dia"><i class="fa-solid fa-plus"></i></button>
+                                <button class="btn-action-small btn-withdraw" data-banco="nubank" title="Retirar Dinheiro (Vai p/ Conta Corrente)"><i class="fa-solid fa-minus"></i></button>
+                            </div>
+                            <button class="btn-save-saldo hidden" data-banco="nubank"><i class="fa-solid fa-check"></i> Salvar</button>
+                            <button class="btn-save-yield hidden" data-banco="nubank"><i class="fa-solid fa-check"></i> Somar</button>
+                            <button class="btn-save-withdraw hidden" data-banco="nubank"><i class="fa-solid fa-check"></i> Retirar</button>
+                        </div>
+                        <div class="rendimento-info">
+                            <small>Previsão Próx. Dia (Média): <span id="diario-nubank" class="positive">R$ 0,00</span></small>
+                            <div class="indicator-expand"><i class="fa-solid fa-chevron-down"></i> Histórico</div>
+                        </div>
+                        <div class="banco-body">
+                            <h4 class="hist-title">Histórico da Conta</h4>
+                            <div class="historico-list" id="historico-nubank"></div>
+                        </div>
+                    </div>
+
+                    <!-- Mercado Pago -->
+                    <div class="card rendimento-card expand-action">
+                        <div class="card-icon mp-icon"><i class="fa-solid fa-handshake"></i></div>
+                        <div class="rendimento-header">
+                            <h3>Mercado Pago (Caixinha)</h3>
+                            <span class="taxa-badge">120% do CDI</span>
+                        </div>
+                        <div class="saldo-edit-container no-expand">
+                            <p id="saldo-mp" class="saldo-texto">R$ 0,00</p>
+                            <div id="edit-box-mp" class="edit-box hidden">
+                                <input type="number" id="input-saldo-mp" class="saldo-input" step="0.01" placeholder="Novo Saldo">
+                            </div>
+                            <div id="yield-box-mp" class="edit-box hidden">
+                                <input type="number" id="input-yield-mp" class="saldo-input yield-input" step="0.01" placeholder="+ Rendimento">
+                            </div>
+                            <div id="withdraw-box-mp" class="edit-box hidden">
+                                <input type="number" id="input-withdraw-mp" class="saldo-input withdraw-input" step="0.01" placeholder="- Retirada">
+                            </div>
+                            <div class="action-buttons" id="actions-mp">
+                                <button class="btn-action-small btn-edit-saldo" data-banco="mp" title="Ajustar Saldo Manualmente"><i class="fa-solid fa-pen"></i></button>
+                                <button class="btn-action-small btn-add-yield" data-banco="mp" title="Somar Rendimento do Dia"><i class="fa-solid fa-plus"></i></button>
+                                <button class="btn-action-small btn-withdraw" data-banco="mp" title="Retirar Dinheiro (Vai p/ Conta Corrente)"><i class="fa-solid fa-minus"></i></button>
+                            </div>
+                            <button class="btn-save-saldo hidden" data-banco="mp"><i class="fa-solid fa-check"></i> Salvar</button>
+                            <button class="btn-save-yield hidden" data-banco="mp"><i class="fa-solid fa-check"></i> Somar</button>
+                            <button class="btn-save-withdraw hidden" data-banco="mp"><i class="fa-solid fa-check"></i> Retirar</button>
+                        </div>
+                        <div class="rendimento-info">
+                            <small>Previsão Próx. Dia (Média): <span id="diario-mp" class="positive">R$ 0,00</span></small>
+                            <div class="indicator-expand"><i class="fa-solid fa-chevron-down"></i> Histórico</div>
+                        </div>
+                        <div class="banco-body">
+                            <h4 class="hist-title">Histórico da Conta</h4>
+                            <div class="historico-list" id="historico-mp"></div>
+                        </div>
+                    </div>
+
+                    <!-- PicPay -->
+                    <div class="card rendimento-card expand-action">
+                        <div class="card-icon picpay-icon"><i class="fa-solid fa-wallet"></i></div>
+                        <div class="rendimento-header">
+                            <h3>PicPay (Caixinha)</h3>
+                            <span class="taxa-badge highlight-badge">121% do CDI</span>
+                        </div>
+                        <div class="saldo-edit-container no-expand">
+                            <p id="saldo-picpay" class="saldo-texto">R$ 0,00</p>
+                            <div id="edit-box-picpay" class="edit-box hidden">
+                                <input type="number" id="input-saldo-picpay" class="saldo-input" step="0.01" placeholder="Novo Saldo">
+                            </div>
+                            <div id="yield-box-picpay" class="edit-box hidden">
+                                <input type="number" id="input-yield-picpay" class="saldo-input yield-input" step="0.01" placeholder="+ Rendimento">
+                            </div>
+                            <div id="withdraw-box-picpay" class="edit-box hidden">
+                                <input type="number" id="input-withdraw-picpay" class="saldo-input withdraw-input" step="0.01" placeholder="- Retirada">
+                            </div>
+                            <div class="action-buttons" id="actions-picpay">
+                                <button class="btn-action-small btn-edit-saldo" data-banco="picpay" title="Ajustar Saldo Manualmente"><i class="fa-solid fa-pen"></i></button>
+                                <button class="btn-action-small btn-add-yield" data-banco="picpay" title="Somar Rendimento do Dia"><i class="fa-solid fa-plus"></i></button>
+                                <button class="btn-action-small btn-withdraw" data-banco="picpay" title="Retirar Dinheiro (Vai p/ Conta Corrente)"><i class="fa-solid fa-minus"></i></button>
+                            </div>
+                            <button class="btn-save-saldo hidden" data-banco="picpay"><i class="fa-solid fa-check"></i> Salvar</button>
+                            <button class="btn-save-yield hidden" data-banco="picpay"><i class="fa-solid fa-check"></i> Somar</button>
+                            <button class="btn-save-withdraw hidden" data-banco="picpay"><i class="fa-solid fa-check"></i> Retirar</button>
+                        </div>
+                        <div class="rendimento-info">
+                            <small>Previsão Próx. Dia (Média): <span id="diario-picpay" class="positive">R$ 0,00</span></small>
+                            <div class="indicator-expand"><i class="fa-solid fa-chevron-down"></i> Histórico</div>
+                        </div>
+                        <div class="banco-body">
+                            <h4 class="hist-title">Histórico da Conta</h4>
+                            <div class="historico-list" id="historico-picpay"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="renda-variavel" class="tab-content">
+                <header class="section-header">
+                    <h2>Renda Variável</h2>
+                    <p>Cadastre e gerencie FIIs, Ações e Criptomoedas. Dividendos caem na Conta Corrente.</p>
+                </header>
+
+                <div class="financial-form">
+                    <input type="text" id="rv-ticker" placeholder="Ativo (ex: MXRF11, BTC)" required>
+                    <select id="rv-tipo" required>
+                        <option value="" disabled selected hidden>Tipo de Ativo</option>
+                        <option value="FII">Fundo Imobiliário (FII)</option>
+                        <option value="Ação">Ação</option>
+                        <option value="Cripto">Criptomoeda</option>
+                    </select>
+                    <input type="number" id="rv-qtde" placeholder="Quantidade / Frações" step="0.000001" required>
+                    <input type="number" id="rv-preco" placeholder="Preço Médio Pago (R$)" step="0.01" required>
+                    <button id="btn-add-rv"><i class="fa-solid fa-plus"></i> Adicionar Ativo</button>
+                </div>
+
+                <div class="cards" id="lista-ativos"></div>
+            </section>
+
+            <section id="descritivos" class="tab-content">
+                <header class="section-header">
+                    <h2>Descritivos Financeiros</h2>
+                    <p>Despesas debitam da Conta Corrente. Aportes vão p/ Caixinha de menor valor.</p>
+                </header>
+
+                <div class="financial-form">
+                    <input type="text" id="input-data" placeholder="Data" required 
+                           onfocus="(this.type='date'); try{this.showPicker()}catch(e){}" 
+                           onblur="if(!this.value) this.type='text'">
+                    <input type="text" id="input-desc" placeholder="Descrição" required>
+                    <select id="input-cat" required>
+                        <option value="" disabled selected hidden>Categoria</option>
+                        <option value="Aporte Mensal">Aporte Mensal</option>
+                        <option value="Aporte Eventual">Aporte Eventual</option>
+                        <option value="Despesa Fixa">Despesa Fixa</option>
+                        <option value="Despesa Eventual">Despesa Eventual</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                    <input type="number" id="input-valor" placeholder="Valor (R$)" step="0.01" required>
+                    <select id="input-tipo" class="hidden">
+                        <option value="entrada">Entrada (+)</option>
+                        <option value="saida">Saída (-)</option>
+                    </select>
+                    <button id="btn-adicionar"><i class="fa-solid fa-plus"></i> Adicionar</button>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; margin-top: -24px; margin-bottom: 15px; position: relative; z-index: 5;">
+                    <button id="btn-toggle-filters" class="btn-toggle-filters">
+                        <i class="fa-solid fa-filter"></i> Mostrar Filtros e Busca
+                    </button>
+                </div>
+
+                <div class="filters-bar hidden" id="filters-bar-container">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="filter-busca" placeholder="Buscar por descrição ou valor...">
+                    </div>
+                    <select id="filter-categoria">
+                        <option value="todas">Todas as Categorias</option>
+                        <option value="Aporte Mensal">Aporte Mensal</option>
+                        <option value="Aporte Eventual">Aporte Eventual</option>
+                        <option value="Despesa Fixa">Despesa Fixa</option>
+                        <option value="Despesa Eventual">Despesa Eventual</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                    <select id="filter-tipo">
+                        <option value="todos">Todos os Tipos</option>
+                        <option value="entrada">Apenas Receitas (+)</option>
+                        <option value="saida">Apenas Despesas (-)</option>
+                    </select>
+                    
+                    <input type="text" id="filter-data" placeholder="Data Específica" 
+                           onfocus="(this.type='date'); try{this.showPicker()}catch(e){}" 
+                           onblur="if(!this.value) this.type='text'">
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table" id="table-finance">
+                        <thead>
+                            <tr>
+                                <th data-sort="data" class="sortable">Data <i class="fa-solid fa-sort"></i></th>
+                                <th data-sort="desc" class="sortable">Descrição <i class="fa-solid fa-sort"></i></th>
+                                <th data-sort="cat" class="sortable">Categoria <i class="fa-solid fa-sort"></i></th>
+                                <th data-sort="valor" class="sortable">Valor <i class="fa-solid fa-sort"></i></th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="emprestimos" class="tab-content">
+                <header class="section-header">
+                    <h2>Gerenciador de Empréstimos</h2>
+                    <p>O valor sai da sua Conta Corrente e volta a cada parcela paga.</p>
+                </header>
+
+                <div class="financial-form">
+                    <input type="text" id="emp-nome" placeholder="Nome/Descrição (ex: João)" required style="flex: 1.5;">
+                    <input type="number" id="emp-valor" placeholder="Valor Emprestado (R$)" step="10" required>
+                    <input type="number" id="emp-taxa-total" placeholder="Juros Totais (%)" step="1" required>
+                    
+                    <select id="emp-intervalo" required>
+                        <option value="" disabled selected hidden>Tipo de Parcela</option>
+                        <option value="Diária">Diária</option>
+                        <option value="Semanal">Semanal</option>
+                        <option value="Quinzenal">Quinzenal</option>
+                        <option value="Mensal">Mensal</option>
+                    </select>
+
+                    <input type="number" id="emp-prazo" placeholder="Qtd. de Parcelas" step="1" required>
+                    
+                    <button id="btn-add-emp"><i class="fa-solid fa-plus"></i> Criar Empréstimo</button>
+                </div>
+
+                <div id="lista-emprestimos" class="emprestimos-list"></div>
+            </section>
+
+            <!-- Seção de Configurações, Backup e Nuvem -->
+            <section id="configuracoes" class="tab-content">
+                <header class="section-header">
+                    <h2>Configurações e Nuvem</h2>
+                    <p>Sincronize e gerencie seus dados com segurança.</p>
+                </header>
+
+                <div class="cards" style="grid-template-columns: 1fr;">
+                    
+                    <!-- Card Google Drive -->
+                    <div class="card" style="border-left: 5px solid var(--success);">
+                        <div class="card-icon"><i class="fa-brands fa-google"></i></div>
+                        <h3 style="font-size: 16px; margin-bottom: 10px; color: var(--text-main);">Sincronização com Google Drive</h3>
+                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 25px; font-weight: 400; line-height: 1.6;">
+                            Conecte sua conta do Google para fazer backup automático e sincronizar seus dados em tempo real entre o computador e o celular (Nuvem Leve). Seus dados ficam salvos em uma pasta oculta e segura do seu próprio Drive.
+                        </p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            
+                            <!-- Botão Customizado de Login do Google -->
+                            <button id="btn-google-login" class="btn-backup" style="background-color: #4285F4; color: white; width: fit-content; margin-bottom: 15px;">
+                                <i class="fa-brands fa-google"></i> Fazer login e Conectar Drive
+                            </button>
+                            
+                            <!-- Área logada (Inicia oculta) -->
+                            <div id="cloud-controls" class="hidden" style="background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                                    <i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 20px;"></i>
+                                    <span style="font-size: 14px; font-weight: 600; color: var(--text-main);" id="cloud-status">Conectado e Sincronizado</span>
+                                </div>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <button id="btn-force-sync" class="btn-backup btn-import" style="background-color: #0ea5e9;">
+                                        <i class="fa-solid fa-arrows-rotate"></i> Forçar Sincronização
+                                    </button>
+                                    <button id="btn-logout" class="btn-backup btn-export" style="background-color: var(--text-muted);">
+                                        <i class="fa-solid fa-right-from-bracket"></i> Desconectar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card Backup Local -->
+                    <div class="card" style="border-left: 5px solid var(--primary);">
+                        <div class="card-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                        <h3 style="font-size: 16px; margin-bottom: 10px; color: var(--text-main);">Backup Local Offline (JSON)</h3>
+                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 25px; font-weight: 400; line-height: 1.6;">
+                            Exporte toda a sua base de dados atual como arquivo para o seu dispositivo. Esta é a opção mais segura para ter controle físico dos seus registros.
+                        </p>
+                        
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <button id="btn-export" class="btn-backup btn-export">
+                                <i class="fa-solid fa-download"></i> Exportar Arquivo
+                            </button>
+                            <button id="btn-import-trigger" class="btn-backup btn-import">
+                                <i class="fa-solid fa-upload"></i> Importar Arquivo
+                            </button>
+                            <input type="file" id="input-import" accept=".json" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+        </main>
+    </div>
+
+    <!-- UX Mobile: Floating Action Button (Ação Rápida) -->
+    <button id="fab-add-tx" class="fab-btn" title="Nova Transação"><i class="fa-solid fa-plus"></i></button>
+
+    <script src="script.js"></script>
+
+    <script>
+        // Registra o Service Worker para o modo offline/PWA
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+              .then(reg => console.log('Service Worker registrado!'))
+              .catch(err => console.error('Erro ao registrar Service Worker', err));
+          });
+        }
+    </script>
+</body>
+</html>
