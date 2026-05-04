@@ -408,7 +408,6 @@
                 <div id="lista-emprestimos" class="emprestimos-list"></div>
             </section>
 
-            <!-- Seção de Configurações, Backup e Nuvem -->
             <section id="configuracoes" class="tab-content">
                 <header class="section-header">
                     <h2>Configurações e Nuvem</h2>
@@ -422,17 +421,15 @@
                         <div class="card-icon"><i class="fa-brands fa-google"></i></div>
                         <h3 style="font-size: 16px; margin-bottom: 10px; color: var(--text-main);">Sincronização com Google Drive</h3>
                         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 25px; font-weight: 400; line-height: 1.6;">
-                            Conecte sua conta do Google para fazer backup automático e sincronizar seus dados em tempo real entre o computador e o celular (Nuvem Leve). Seus dados ficam salvos em uma pasta oculta e segura do seu próprio Drive.
+                            Conecte sua conta do Google para fazer backup automático e sincronizar seus dados em tempo real entre o computador e o celular (Nuvem Leve). Seus dados ficam salvos em uma pasta oculta do seu próprio Drive.
                         </p>
                         
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             
-                            <!-- Botão Customizado de Login do Google -->
                             <button id="btn-google-login" class="btn-backup" style="background-color: #4285F4; color: white; width: fit-content; margin-bottom: 15px;">
                                 <i class="fa-brands fa-google"></i> Fazer login e Conectar Drive
                             </button>
                             
-                            <!-- Área logada (Inicia oculta) -->
                             <div id="cloud-controls" class="hidden" style="background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.3);">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
                                     <i class="fa-solid fa-circle-check" style="color: var(--success); font-size: 20px;"></i>
@@ -480,7 +477,6 @@
     <script src="script.js"></script>
 
     <script>
-        // Registra o Service Worker para o modo offline/PWA
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js')
