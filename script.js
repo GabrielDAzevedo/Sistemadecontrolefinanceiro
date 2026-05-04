@@ -9,9 +9,8 @@ const GOOGLE_API = {
     CLIENT_ID: '167789619068-71draj7ofg1tphk3jdur37m7dqno868q.apps.googleusercontent.com',
     API_KEY: 'AIzaSyBebLpALlkZAWMAUxaAFz8oY9K0SoBKDHw',
     DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
-    // Novo escopo: Permite criar e ver arquivos que o próprio app criou no seu Drive normal
     SCOPES: 'https://www.googleapis.com/auth/drive.file', 
-    FOLDER_NAME: 'Sistema Financeiro', // Nome da pasta que será criada no seu Drive
+    FOLDER_NAME: 'Sistema Financeiro', 
     FILE_NAME: 'financas_backup_auto.json',
     tokenClient: null,
     isLoaded: false,
@@ -66,12 +65,10 @@ const DB = {
 // ==========================================
 const Cloud = {
     saveTimeout: null,
+    lastSyncString: null, // Usado para a sincronização diferencial sem criptografia
 
     init() {
-        if (!window.gapi || !window.google) {
-            console.error("Scripts do Google não carregados.");
-            return;
-        }
+        if (!window.gapi || !window.google) return console.error("Scripts do Google não carregados.");
 
         gapi.load('client', () => {
             gapi.client.init({
@@ -79,13 +76,11 @@ const Cloud = {
                 discoveryDocs: [GOOGLE_API.DISCOVERY_DOC]
             }).then(() => {
                 GOOGLE_API.isLoaded = true;
-                
                 const savedToken = sessionStorage.getItem('sf_google_token');
                 if (savedToken) {
                     gapi.client.setToken({ access_token: savedToken });
                     this.onAuthenticated();
                 }
-
             }).catch(e => console.error("Erro no GAPI", e));
         });
 
@@ -93,9 +88,7 @@ const Cloud = {
             client_id: GOOGLE_API.CLIENT_ID,
             scope: GOOGLE_API.SCOPES,
             callback: (tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                    this.onAuthenticated();
-                }
+                if (tokenResponse && tokenResponse.access_token) this.onAuthenticated();
             }
         });
 
@@ -115,22 +108,17 @@ const Cloud = {
             google.accounts.oauth2.revoke(token.access_token, () => {
                 gapi.client.setToken('');
                 sessionStorage.removeItem('sf_google_token');
-                
                 document.getElementById('btn-google-login')?.classList.remove('hidden');
                 document.getElementById('cloud-controls')?.classList.add('hidden');
-                
                 UI.showToast("Desconectado da Nuvem", "success");
             });
         }
     },
 
     onAuthenticated() {
-        const token = gapi.client.getToken().access_token;
-        sessionStorage.setItem('sf_google_token', token);
-        
+        sessionStorage.setItem('sf_google_token', gapi.client.getToken().access_token);
         document.getElementById('btn-google-login')?.classList.add('hidden');
         document.getElementById('cloud-controls')?.classList.remove('hidden');
-        
         this.syncNow();
     },
 
@@ -148,63 +136,48 @@ const Cloud = {
 
     triggerAutoSave() {
         if(this.saveTimeout) clearTimeout(this.saveTimeout);
-        
-        if(!window.gapi || !gapi.client) return;
-        const token = gapi.client.getToken();
-        if(!token) return;
+        if(!window.gapi || !gapi.client || !gapi.client.getToken()) return;
 
         this.saveTimeout = setTimeout(() => {
             this.uploadToDrive(true);
         }, 3000);
     },
 
-    // Nova função: Verifica se a pasta existe. Se não, cria a pasta.
     async getOrCreateFolder() {
         try {
             const response = await gapi.client.drive.files.list({
                 q: `name='${GOOGLE_API.FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
                 fields: 'files(id)'
             });
-            if (response.result.files && response.result.files.length > 0) {
-                return response.result.files[0].id;
-            } else {
-                const folderMetadata = {
-                    name: GOOGLE_API.FOLDER_NAME,
-                    mimeType: 'application/vnd.google-apps.folder'
-                };
-                const createRes = await gapi.client.drive.files.create({
-                    resource: folderMetadata,
-                    fields: 'id'
-                });
-                return createRes.result.id;
-            }
-        } catch (e) {
-            console.error("Erro ao buscar/criar pasta", e);
-            throw e;
-        }
+            if (response.result.files && response.result.files.length > 0) return response.result.files[0].id;
+            
+            const createRes = await gapi.client.drive.files.create({
+                resource: { name: GOOGLE_API.FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' },
+                fields: 'id'
+            });
+            return createRes.result.id;
+        } catch (e) { throw e; }
     },
 
     async syncNow() {
         if(!GOOGLE_API.isLoaded || !gapi.client.getToken()) return this.login();
-
         this.showLoading("Acessando Pasta...");
         
         try {
-            // Pega o ID da pasta visível (ou cria se não existir)
             GOOGLE_API.folderId = await this.getOrCreateFolder();
 
-            // Procura o arquivo JSON dentro dessa pasta específica
+            // Busca todos os backups na nuvem
             const response = await gapi.client.drive.files.list({
-                q: `name='${GOOGLE_API.FILE_NAME}' and '${GOOGLE_API.folderId}' in parents and trashed=false`,
-                fields: 'files(id, modifiedTime)'
+                q: `name contains 'financas_backup_' and '${GOOGLE_API.folderId}' in parents and trashed=false`,
+                orderBy: 'createdTime desc',
+                fields: 'files(id, name)'
             });
 
             const files = response.result.files;
 
             if (files && files.length > 0) {
-                GOOGLE_API.fileId = files[0].id;
-                this.showLoading("Baixando dados...");
-                await this.downloadFromDrive(GOOGLE_API.fileId);
+                await this.downloadFromDrive(files[0].id);
+                this.runBackupCleanup(files); // Limpa versões antigas
             } else {
                 this.showLoading("Criando backup inicial...");
                 await this.uploadToDrive();
@@ -218,33 +191,32 @@ const Cloud = {
             console.error(err);
             this.hideLoading();
             UI.showToast("Erro ao conectar com a nuvem.", "danger");
-            if(err.status === 401 || err.status === 403) {
-                sessionStorage.removeItem('sf_google_token');
-                this.logout();
-            }
+            if(err.status === 401 || err.status === 403) this.logout();
         }
     },
 
     async downloadFromDrive(fileId) {
         try {
-            const file = await gapi.client.drive.files.get({
-                fileId: fileId,
-                alt: 'media'
-            });
+            const file = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
+            
+            let rawData = file.body || file.result; 
+            let data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
 
-            const data = file.result;
-            if(data && typeof data === 'object') {
-                for (const key in data) {
-                    if (key.startsWith('sf_')) {
-                        localStorage.setItem(key, data[key]);
-                    }
-                }
-                UI.showToast("Dados baixados da nuvem!", "success");
-                App.updateAll();
+            if(!data || typeof data !== 'object') {
+                throw new Error("Arquivo corrompido ou formato inválido.");
             }
+
+            for (const key in data) {
+                if (key.startsWith('sf_')) localStorage.setItem(key, data[key]);
+            }
+            
+            this.lastSyncString = JSON.stringify(data); // Guarda o estado baixado
+            UI.showToast("Dados atualizados da nuvem!", "success");
+            App.updateAll();
+
         } catch (e) {
             console.error("Erro no Download", e);
-            UI.showToast("Erro ao ler dados da nuvem", "danger");
+            UI.showToast(e.message || "Erro ao ler dados da nuvem", "danger");
         }
     },
 
@@ -257,47 +229,39 @@ const Cloud = {
             if (key.startsWith('sf_')) data[key] = localStorage.getItem(key);
         }
         
-        const fileContent = JSON.stringify(data);
-        const metadata = {
-            name: GOOGLE_API.FILE_NAME,
-            mimeType: 'application/json'
-        };
+        const currentStateString = JSON.stringify(data);
 
-        // Se for a primeira vez (POST), salva dentro da pasta 'Sistema Financeiro'
-        if (!GOOGLE_API.fileId && GOOGLE_API.folderId) {
-            metadata.parents = [GOOGLE_API.folderId];
+        // DELTA SYNC: Verifica se a string atual é igual à última salva
+        if (this.lastSyncString === currentStateString) {
+            if(!isSilent) console.log("Sem alterações detectadas. Upload ignorado para economizar dados.");
+            return;
         }
 
-        const boundary = '-------314159265358979323846';
-        const delimiter = "\r\n--" + boundary + "\r\n";
-        const close_delim = "\r\n--" + boundary + "--";
+        const dataAtual = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `financas_backup_${dataAtual}.json`; // Agora com timestamp para versionamento
 
+        const metadata = { name: fileName, mimeType: 'application/json', parents: [GOOGLE_API.folderId] };
+        
+        const boundary = '-------314159265358979323846';
         const multipartRequestBody =
-            delimiter +
+            "\r\n--" + boundary + "\r\n" +
             'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
             JSON.stringify(metadata) +
-            delimiter +
+            "\r\n--" + boundary + "\r\n" +
             'Content-Type: application/json\r\n\r\n' +
-            fileContent +
-            close_delim;
+            currentStateString +
+            "\r\n--" + boundary + "--";
 
         try {
-            const method = GOOGLE_API.fileId ? 'PATCH' : 'POST';
-            const path = GOOGLE_API.fileId ? `/upload/drive/v3/files/${GOOGLE_API.fileId}` : '/upload/drive/v3/files';
-
-            const request = gapi.client.request({
-                path: path,
-                method: method,
+            await gapi.client.request({
+                path: '/upload/drive/v3/files',
+                method: 'POST',
                 params: { uploadType: 'multipart' },
-                headers: {
-                    'Content-Type': 'multipart/related; boundary="' + boundary + '"'
-                },
+                headers: { 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
                 body: multipartRequestBody
             });
 
-            const res = await request;
-            GOOGLE_API.fileId = res.result.id;
-
+            this.lastSyncString = currentStateString; // Atualiza a trava do delta sync
             if(!isSilent) UI.showToast("Backup salvo na nuvem!", "success");
             
             const statusLabel = document.getElementById('cloud-status');
@@ -306,6 +270,16 @@ const Cloud = {
         } catch (e) {
             console.error("Erro no Upload", e);
             if(!isSilent) UI.showToast("Falha ao subir para nuvem", "danger");
+        }
+    },
+
+    async runBackupCleanup(files) {
+        // VERSIONAMENTO: Mantém apenas os 5 arquivos mais recentes e apaga o resto
+        if (files && files.length > 5) {
+            for (let i = 5; i < files.length; i++) {
+                try { await gapi.client.drive.files.delete({ fileId: files[i].id }); } 
+                catch (e) { console.warn("Erro ao apagar versão antiga", e); }
+            }
         }
     }
 };
@@ -362,6 +336,11 @@ const UI = {
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
         if (salvar) localStorage.setItem('sf_aba_ativa', targetId);
+
+        // Gatilho do Lazy Load
+        if (targetId === 'dashboard') {
+            Dashboard.render(); 
+        }
     },
 
     initNavegacao() {
@@ -465,20 +444,30 @@ const Backup = {
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
-                const data = JSON.parse(event.target.result);
+                let rawData = event.target.result;
+                let data = JSON.parse(rawData);
+
+                // SCHEMA VALIDATION BÁSICA
+                if (typeof data !== 'object' || Array.isArray(data)) {
+                    throw new Error("Estrutura do arquivo de backup é inválida.");
+                }
+
+                const chavesCriticas = ['sf_conta_corrente_v2', 'sf_transacoes', 'sf_saldos_bancos_v6'];
+                const temChaves = chavesCriticas.some(k => Object.keys(data).includes(k));
+                
+                if (!temChaves) {
+                    throw new Error("Arquivo incompatível. O arquivo não pertence ao Meu Sistema Financeiro.");
+                }
+
                 let imported = 0;
                 
-                // Limpa as chaves antigas do sistema para evitar lixo do cache
                 const chavesParaRemover = [];
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key.startsWith('sf_') && key !== 'sf_google_token') { 
-                        chavesParaRemover.push(key);
-                    }
+                    if (key.startsWith('sf_') && key !== 'sf_google_token') chavesParaRemover.push(key);
                 }
                 chavesParaRemover.forEach(k => localStorage.removeItem(k));
 
-                // Aplica os dados importados
                 for (const key in data) {
                     if (key.startsWith('sf_')) {
                         localStorage.setItem(key, data[key]);
@@ -487,16 +476,16 @@ const Backup = {
                 }
                 
                 if (imported > 0) {
-                    UI.showToast("Dados aplicados! Redesenhando...", "success");
+                    UI.showToast("Dados aplicados com segurança!", "success");
+                    Cloud.lastSyncString = JSON.stringify(data); // Atualiza o delta local
                     App.updateAll();
                     Cloud.triggerAutoSave();
-                    document.getElementById('input-import').value = ''; 
-                } else {
-                    UI.showToast("Arquivo de backup inválido ou vazio.", "warning");
                 }
             } catch (error) {
                 console.error("Erro na importação:", error);
-                UI.showToast("Erro ao ler o arquivo JSON.", "danger");
+                UI.showToast(error.message || "Erro fatal ao ler o backup.", "danger");
+            } finally {
+                document.getElementById('input-import').value = ''; 
             }
         };
         reader.readAsText(file);
@@ -673,6 +662,12 @@ const Dashboard = {
         if (idx !== -1) hist[idx].valor = patrimonio; else hist.push({ data: hoje, valor: patrimonio });
         if (hist.length > 365) hist.shift();
         DB.setHistoricoPatrimonio(hist);
+
+        // --- LAZY LOADING TRAVA ---
+        const dashboardAba = document.getElementById('dashboard');
+        if (!dashboardAba || !dashboardAba.classList.contains('active')) {
+            return; 
+        }
 
         const isDark = document.body.getAttribute('data-theme') === 'dark';
         const textColor = isDark ? '#94a3b8' : '#64748b';
