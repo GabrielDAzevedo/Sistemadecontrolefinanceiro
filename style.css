@@ -53,7 +53,6 @@ select {
     padding-right: 40px !important;
     cursor: pointer;
 }
-/* Esconde a setinha nativa extra no IE/Edge antigo */
 select::-ms-expand { display: none; }
 
 .sidebar { width: 80px; background: var(--bg-sidebar); display: flex; flex-direction: column; align-items: center; padding: 25px 0; box-shadow: 4px 0 10px rgba(0,0,0,0.05); z-index: 10; }
