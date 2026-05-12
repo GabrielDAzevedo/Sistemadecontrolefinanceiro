@@ -27,6 +27,20 @@
         <p id="loading-text">Sincronizando com o Google Drive...</p>
     </div>
 
+    <div id="login-overlay" class="loading-overlay hidden" style="z-index: 20000; flex-direction: column; text-align: center; padding: 20px;">
+        <div class="logo-circle" style="width: 80px; height: 80px; margin-bottom: 25px; font-size: 35px; box-shadow: 0 10px 25px rgba(59, 130, 246, 0.5);"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+        <h2 style="color: white; margin-bottom: 15px; font-size: 26px;">Bem-vindo!</h2>
+        <p style="color: #cbd5e1; margin-bottom: 35px; font-size: 15px; max-width: 350px; line-height: 1.6;">Para manter seus dados financeiros sempre seguros e sincronizados entre seus dispositivos, conecte-se ao seu Google Drive.</p>
+        <div style="display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 300px;">
+            <button id="btn-initial-login" class="btn-backup" style="background-color: #4285F4; color: white; padding: 16px; font-size: 16px; width: 100%; justify-content: center;">
+                <i class="fa-brands fa-google" style="font-size: 18px;"></i> Entrar com Google
+            </button>
+            <button id="btn-initial-offline" class="btn-offline-mode">
+                Continuar Offline por enquanto
+            </button>
+        </div>
+    </div>
+
     <div class="app-container">
         
         <aside class="sidebar">
