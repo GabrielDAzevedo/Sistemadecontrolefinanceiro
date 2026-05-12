@@ -160,13 +160,26 @@ const Cloud = {
                 this.showLoading("Renovando sessão...");
                 try {
                     GOOGLE_API.tokenClient.requestAccessToken({ prompt: 'none' });
+                    
+                    // Trava de segurança para mobile: se o Google não responder em 5 segundos, cancela o carregamento
+                    setTimeout(() => {
+                        const loading = document.getElementById('loading-overlay');
+                        if (loading && !loading.classList.contains('hidden') && loading.innerText.includes("Renovando")) {
+                            this.hideLoading();
+                            document.getElementById('login-overlay')?.classList.remove('hidden');
+                            UI.showToast("Renovação bloqueada pelo navegador. Por favor, clique em Entrar.", "warning");
+                        }
+                    }, 5000);
+
                 } catch (e) {
                     this.hideLoading();
                     document.getElementById('login-overlay')?.classList.remove('hidden');
                 }
             }
+        } else if (authChoice === 'offline') {
+            document.getElementById('login-overlay')?.classList.add('hidden');
         } else {
-            this.hideLoading();
+            document.getElementById('login-overlay')?.classList.remove('hidden');
         }
     },
 
@@ -1441,7 +1454,7 @@ const Emprestimos = {
                     <div class="emp-body-header">
                         <h4>Controle</h4>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> <span>Copiar Recibo</span></button>
+                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> <span>Copiar</span></button>
                             <button class="btn-export-emp" data-id="${emp.id}" title="Baixar comprovante de evolução em imagem"><i class="fa-solid fa-download"></i> <span>Baixar</span></button>
                             <button class="btn-delete-emp" data-id="${emp.id}"><i class="fa-solid fa-trash"></i> <span>Apagar</span></button>
                         </div>
