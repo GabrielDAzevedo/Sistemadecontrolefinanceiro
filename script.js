@@ -429,6 +429,20 @@ const UI = {
 
         if (salvar) localStorage.setItem('sf_aba_ativa', targetId);
 
+        // LÓGICA DO FAB E FORMULÁRIOS NO MOBILE
+        const fab = document.getElementById('fab-add-tx');
+        if (fab) {
+            fab.innerHTML = '<i class="fa-solid fa-plus"></i>';
+            if (targetId === 'dashboard' || targetId === 'rendimentos' || targetId === 'configuracoes') {
+                fab.classList.add('hidden'); // Oculta o FAB nestas abas
+            } else {
+                fab.classList.remove('hidden'); // Mostra nas outras (Descritivos, Empréstimos, RV)
+            }
+        }
+        
+        // Sempre que trocar de aba, esconde o formulário no mobile para ficar limpo
+        document.querySelectorAll('.financial-form').forEach(f => f.classList.remove('show'));
+
         if (targetId === 'dashboard') {
             Dashboard.render(); 
         }
@@ -459,9 +473,20 @@ const UI = {
         const abaSalva = localStorage.getItem('sf_aba_ativa');
         if (abaSalva) this.ativarAba(abaSalva, false);
 
-        document.getElementById('fab-add-tx')?.addEventListener('click', () => {
-            this.ativarAba('descritivos');
-            document.getElementById('input-desc').focus();
+        // Ação contextual do botão + (FAB) no Mobile
+        document.getElementById('fab-add-tx')?.addEventListener('click', function() {
+            const activeTab = document.querySelector('.tab-content.active').id;
+            const form = document.querySelector(`#${activeTab} .financial-form`);
+            
+            if (form) {
+                form.classList.toggle('show');
+                if (form.classList.contains('show')) {
+                    this.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                    window.scrollTo({ top: form.offsetTop - 70, behavior: 'smooth' });
+                } else {
+                    this.innerHTML = '<i class="fa-solid fa-plus"></i>';
+                }
+            }
         });
     },
 
@@ -948,6 +973,15 @@ const Transacoes = {
                 document.getElementById('input-tipo').value = t.tipo;
             }
             document.getElementById('btn-adicionar').innerHTML = '<i class="fa-solid fa-check"></i> Salvar Edição';
+            
+            // Garantir que o formulário apareça no mobile
+            const form = document.querySelector('#descritivos .financial-form');
+            if(form && !form.classList.contains('show')) {
+                form.classList.add('show');
+                const fab = document.getElementById('fab-add-tx');
+                if(fab) fab.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            }
+
             window.scrollTo({ top: document.querySelector('.financial-form').offsetTop - 50, behavior: 'smooth' });
         }
     },
@@ -1437,6 +1471,11 @@ const Emprestimos = {
 // ==========================================
 const App = {
     init() {
+        const authChoice = localStorage.getItem('sf_auth_choice');
+        if (!authChoice) {
+            document.getElementById('login-overlay')?.classList.remove('hidden');
+        }
+
         UI.initTheme();
         UI.initNavegacao();
         Backup.init();
