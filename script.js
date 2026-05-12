@@ -85,6 +85,7 @@ const Cloud = {
             scope: GOOGLE_API.SCOPES,
             callback: (tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
+                    localStorage.setItem('sf_auth_choice', 'google');
                     localStorage.setItem('sf_google_token', tokenResponse.access_token);
                     localStorage.setItem('sf_google_token_time', Date.now().toString());
                     gapi.client.setToken({ access_token: tokenResponse.access_token });
@@ -100,8 +101,9 @@ const Cloud = {
         document.getElementById('btn-google-login')?.addEventListener('click', () => this.login());
         document.getElementById('btn-initial-login')?.addEventListener('click', () => this.login());
         document.getElementById('btn-initial-offline')?.addEventListener('click', () => {
+            localStorage.setItem('sf_auth_choice', 'offline');
             document.getElementById('login-overlay').classList.add('hidden');
-            UI.showToast("Modo Offline. Seus dados não serão salvos na nuvem automaticamente.", "warning");
+            UI.showToast("Modo Offline Ativado. Seus dados ficarão apenas neste dispositivo.", "warning");
         });
         document.getElementById('btn-force-sync')?.addEventListener('click', () => this.syncNow());
         document.getElementById('btn-logout')?.addEventListener('click', () => this.logout(false));
@@ -110,17 +112,36 @@ const Cloud = {
     checkSession() {
         const savedToken = localStorage.getItem('sf_google_token');
         const tokenTime = localStorage.getItem('sf_google_token_time');
+        const authChoice = localStorage.getItem('sf_auth_choice');
         const now = Date.now();
         
-        if (savedToken && tokenTime && (now - parseInt(tokenTime) < 3300000)) {
+        // Validade de 55 minutos para o token
+        const isTokenValid = savedToken && tokenTime && (now - parseInt(tokenTime) < 3300000);
+
+        if (isTokenValid) {
             gapi.client.setToken({ access_token: savedToken });
+            const loginOverlay = document.getElementById('login-overlay');
+            if(loginOverlay) loginOverlay.classList.add('hidden');
             this.onAuthenticated();
         } else {
             localStorage.removeItem('sf_google_token');
             localStorage.removeItem('sf_google_token_time');
             gapi.client.setToken('');
-            const overlay = document.getElementById('login-overlay');
-            if(overlay) overlay.classList.remove('hidden');
+            
+            if (authChoice === 'google') {
+                const loginOverlay = document.getElementById('login-overlay');
+                if(loginOverlay) loginOverlay.classList.add('hidden');
+                
+                document.getElementById('btn-google-login')?.classList.remove('hidden');
+                document.getElementById('cloud-controls')?.classList.add('hidden');
+                console.log("Sessão da nuvem expirou. Sincronização pausada.");
+            } else if (authChoice === 'offline') {
+                const loginOverlay = document.getElementById('login-overlay');
+                if(loginOverlay) loginOverlay.classList.add('hidden');
+            } else {
+                const overlay = document.getElementById('login-overlay');
+                if(overlay) overlay.classList.remove('hidden');
+            }
         }
     },
 
@@ -133,13 +154,15 @@ const Cloud = {
         const clearLocal = () => {
             localStorage.removeItem('sf_google_token');
             localStorage.removeItem('sf_google_token_time');
+            if (!isExpired) {
+                localStorage.setItem('sf_auth_choice', 'offline');
+            }
             gapi.client.setToken('');
             document.getElementById('btn-google-login')?.classList.remove('hidden');
             document.getElementById('cloud-controls')?.classList.add('hidden');
             
             if (isExpired) {
-                UI.showToast("Sessão Expirada na Nuvem. Faça login novamente.", "warning");
-                document.getElementById('login-overlay')?.classList.remove('hidden');
+                UI.showToast("Sessão Expirada na Nuvem. Faça login novamente em Configurações.", "warning");
             } else {
                 UI.showToast("Desconectado da Nuvem", "success");
             }
@@ -505,10 +528,13 @@ const Backup = {
 
                 let imported = 0;
                 
+                const preserveKeys = ['sf_google_token', 'sf_google_token_time', 'sf_auth_choice', 'sf_theme'];
                 const chavesParaRemover = [];
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key.startsWith('sf_') && key !== 'sf_google_token') chavesParaRemover.push(key);
+                    if (key.startsWith('sf_') && !preserveKeys.includes(key)) {
+                        chavesParaRemover.push(key);
+                    }
                 }
                 chavesParaRemover.forEach(k => localStorage.removeItem(k));
 
@@ -1240,7 +1266,7 @@ const Emprestimos = {
                 App.updateAll();
             }
 
-            // Lógica para Copiar ou Baixar o Recibo em Imagem
+            // Função auxiliar para preparar e tirar a foto
             const btnCopy = e.target.closest('.btn-copy-emp');
             const btnExport = e.target.closest('.btn-export-emp');
             
