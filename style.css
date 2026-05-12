@@ -215,7 +215,7 @@ select::-ms-expand { display: none; }
 .btn-toggle-filters { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-muted); padding: 10px 16px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; box-shadow: var(--shadow-sm); }
 .btn-toggle-filters:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
 
-/* Barra de Filtros */
+/* Barra de Filtros (Cores padronizadas de placeholder) */
 .filters-bar { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; background: var(--card-bg); padding: 20px; border-radius: 16px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); }
 .search-box { position: relative; flex: 2; min-width: 200px; }
 .search-box i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--text-placeholder); font-size: 14px; }
@@ -248,8 +248,7 @@ select::-ms-expand { display: none; }
 .empty-state i { font-size: 40px; margin-bottom: 15px; opacity: 0.5; }
 
 /* Empréstimos */
-.emprestimos-list { display: flex; flex-direction: column; gap: 20px; margin-top: 10px; }
-.emp-card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); border-left: 5px solid var(--warning); overflow: hidden; }
+.emp-card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); border-left: 5px solid var(--warning); overflow: hidden; margin-bottom: 20px;}
 .emp-header { padding: 25px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.2s; }
 .emp-header:hover { background: var(--input-bg); }
 .emp-title h3 { font-size: 18px; color: var(--text-main); margin-bottom: 5px; }
@@ -263,8 +262,15 @@ select::-ms-expand { display: none; }
 .emp-card.expanded .emp-body { display: block; animation: fadeIn 0.3s ease-out; }
 .emp-body-header { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
 .emp-body-header h4 { font-size: 14px; color: var(--text-main); }
+
 .btn-delete-emp { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 13px; padding: 5px 10px; border-radius: 5px; font-weight: 500; transition: background 0.2s; }
 .btn-delete-emp:hover { background: rgba(239, 68, 68, 0.1); }
+.btn-export-emp { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; padding: 5px 10px; border-radius: 5px; font-weight: 500; transition: background 0.2s; }
+.btn-export-emp:hover { background: rgba(59, 130, 246, 0.1); }
+.btn-copy-emp { background: none; border: none; color: var(--success); cursor: pointer; font-size: 13px; padding: 5px 10px; border-radius: 5px; font-weight: 500; transition: all 0.2s; }
+.btn-copy-emp:hover { background: rgba(16, 185, 129, 0.1); }
+.btn-copy-emp.success { background: var(--success); color: white; transform: scale(1.05); }
+
 .parcela-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px; transition: all 0.2s; }
 .parcela-item:hover { border-color: var(--primary); }
 .parcela-item.paga { background: var(--bg-app); opacity: 0.6; border-color: transparent; }
@@ -362,4 +368,39 @@ select::-ms-expand { display: none; }
     .emp-progress-container { padding: 0 16px 14px 16px; }
     .emp-body { padding: 14px 16px; }
     .emp-progress-text { flex-direction: column; gap: 4px; }
+}
+
+/* ==========================================
+   MELHORIAS DE LAYOUT (EMPRÉSTIMOS 2 COLUNAS)
+   ========================================== */
+.parcelas-list { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 10px; 
+    max-height: 350px; 
+    overflow-y: auto; 
+    padding-right: 5px; 
+    margin-top: 15px;
+}
+.parcelas-list::-webkit-scrollbar { width: 4px; }
+.parcelas-list::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 4px; }
+
+/* Estilo exclusivo para a foto do recibo preservando a identidade */
+.emp-card.export-mode { 
+    box-shadow: none !important; 
+    border-radius: 16px !important;
+    border: 1px solid var(--border-color) !important;
+    border-left: 5px solid var(--warning) !important; /* Força a manter a bordinha laranja */
+    margin: 0 !important;
+}
+.emp-card.export-mode .parcelas-list { 
+    max-height: none !important; 
+    overflow: visible !important; 
+}
+
+@media (max-width: 520px) {
+    .parcelas-list { gap: 6px; }
+    .parcela-item { padding: 8px 10px; }
+    .parcela-item span { font-size: 11px; }
+    .valor-parcela { font-size: 11px; }
 }
