@@ -112,7 +112,6 @@ const Cloud = {
         const tokenTime = localStorage.getItem('sf_google_token_time');
         const now = Date.now();
         
-        // Google tokens expire in ~3600 seconds. Check within a safe threshold (3.3M ms = ~55 mins)
         if (savedToken && tokenTime && (now - parseInt(tokenTime) < 3300000)) {
             gapi.client.setToken({ access_token: savedToken });
             this.onAuthenticated();
@@ -198,7 +197,7 @@ const Cloud = {
     },
 
     async syncNow() {
-        if(!GOOGLE_API.isLoaded || !gapi.client.getToken()) return; // Aborta silenciosamente em modo offline
+        if(!GOOGLE_API.isLoaded || !gapi.client.getToken()) return; 
         this.showLoading("Acessando Pasta...");
         
         try {
@@ -1241,7 +1240,7 @@ const Emprestimos = {
                 App.updateAll();
             }
 
-            // Função auxiliar para preparar e tirar a foto
+            // Lógica para Copiar ou Baixar o Recibo em Imagem
             const btnCopy = e.target.closest('.btn-copy-emp');
             const btnExport = e.target.closest('.btn-export-emp');
             
@@ -1254,21 +1253,19 @@ const Emprestimos = {
                 const iconeOriginal = botao.innerHTML;
                 const larguraOriginal = card.style.width;
                 
-                // Prepara a interface (Fixa largura real, aplica classe que preserva borda, esconde controle)
                 card.style.width = card.offsetWidth + 'px'; 
                 card.classList.add('export-mode');
                 controleHeader.style.display = 'none';
                 receiptDate.querySelector('.receipt-date-text').innerText = new Date().toLocaleString('pt-BR');
                 receiptDate.classList.remove('hidden');
                 
-                botao.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${isCopy ? 'Copiando...' : 'Baixando...'}`;
+                botao.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>${isCopy ? 'Copiando...' : 'Baixando...'}</span>`;
 
                 setTimeout(() => {
                     html2canvas(card, {
                         backgroundColor: document.body.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff',
                         scale: 2 
                     }).then(canvas => {
-                        // Restaura a interface
                         card.style.width = larguraOriginal;
                         card.classList.remove('export-mode');
                         controleHeader.style.display = 'flex';
@@ -1281,7 +1278,7 @@ const Emprestimos = {
                                         const item = new ClipboardItem({ "image/png": blob });
                                         navigator.clipboard.write([item]).then(() => {
                                             botao.classList.add('success');
-                                            botao.innerHTML = '<i class="fa-solid fa-check"></i> Copiado!';
+                                            botao.innerHTML = '<i class="fa-solid fa-check"></i> <span>Copiado!</span>';
                                             UI.showToast("Recibo copiado para a área de transferência!", "success");
                                             setTimeout(() => {
                                                 botao.classList.remove('success');
@@ -1338,9 +1335,9 @@ const Emprestimos = {
                     <div class="emp-body-header">
                         <h4>Controle</h4>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> Copiar Recibo</button>
-                            <button class="btn-export-emp" data-id="${emp.id}" title="Baixar comprovante de evolução em imagem"><i class="fa-solid fa-download"></i> Baixar</button>
-                            <button class="btn-delete-emp" data-id="${emp.id}"><i class="fa-solid fa-trash"></i> Apagar</button>
+                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> <span>Copiar Recibo</span></button>
+                            <button class="btn-export-emp" data-id="${emp.id}" title="Baixar comprovante de evolução em imagem"><i class="fa-solid fa-download"></i> <span>Baixar</span></button>
+                            <button class="btn-delete-emp" data-id="${emp.id}"><i class="fa-solid fa-trash"></i> <span>Apagar</span></button>
                         </div>
                     </div>
                     <div class="parcelas-list">
