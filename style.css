@@ -213,7 +213,8 @@ select::-ms-expand { display: none; }
 #btn-adicionar, #btn-add-emp, #btn-add-rv { background-color: var(--primary); color: white; border: none; padding: 14px 28px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 180px;}
 #btn-adicionar:hover, #btn-add-emp:hover, #btn-add-rv:hover { background-color: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3); }
 
-/* Toggle Button para os Filtros */
+/* Toggle Button para os Filtros e Container */
+.filter-toggle-container { display: flex; justify-content: flex-end; margin-top: -24px; margin-bottom: 15px; position: relative; z-index: 5; }
 .btn-toggle-filters { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-muted); padding: 10px 16px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; box-shadow: var(--shadow-sm); }
 .btn-toggle-filters:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
 
@@ -314,7 +315,6 @@ select::-ms-expand { display: none; }
 /* Responsividade */
 @media (max-width: 900px) {
     .app-container { flex-direction: column; height: 100vh; }
-    .fab-btn { display: flex; }
     
     .theme-toggle-btn { top: 15px; right: 15px; width: 40px; height: 40px; font-size: 16px; }
     
@@ -337,9 +337,30 @@ select::-ms-expand { display: none; }
     .charts-grid { grid-template-columns: 1fr; gap: 15px; margin-top: 15px; }
     .chart-card { padding: 16px; border-radius: 14px; }
     
-    .financial-form { flex-direction: column; gap: 10px; padding: 16px; border-radius: 12px; margin-bottom: 16px; }
+    /* Configurações do FAB no Mobile */
+    .fab-btn { display: flex; }
+    .fab-btn.hidden { display: none !important; }
+
+    /* Esconde os formulários no mobile até clicar no FAB */
+    .financial-form { 
+        display: none; 
+        flex-direction: column; 
+        gap: 10px; 
+        padding: 16px; 
+        border-radius: 12px; 
+        margin-bottom: 16px; 
+    }
+    .financial-form.show { 
+        display: flex; 
+        animation: fadeIn 0.3s ease-out;
+    }
+    
     .financial-form input, .financial-form select, #btn-adicionar, #btn-add-emp, #btn-add-rv { width: 100%; min-width: 100%; padding: 12px 14px; }
     
+    /* Ajusta o alinhamento do botão de filtros */
+    .filter-toggle-container { margin-top: 0; }
+    .btn-toggle-filters { width: auto !important; margin-left: auto; }
+
     .filters-bar { flex-direction: column; gap: 10px; padding: 16px; border-radius: 12px;}
     .search-box input, .filters-bar select, #filter-data { width: 100%; min-width: 100%; padding: 12px 14px; }
     .search-box input { padding-left: 40px; }
