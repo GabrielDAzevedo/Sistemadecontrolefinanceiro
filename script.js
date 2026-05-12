@@ -70,11 +70,9 @@ const Cloud = {
     init() {
         const authChoice = localStorage.getItem('sf_auth_choice');
         
-        if (authChoice === 'google') {
-            this.showLoading("Verificando sessão...");
-        } else if (authChoice === 'offline') {
+        if (authChoice === 'offline') {
             document.getElementById('login-overlay')?.classList.add('hidden');
-        } else {
+        } else if (!authChoice) {
             document.getElementById('login-overlay')?.classList.remove('hidden');
         }
 
@@ -85,7 +83,7 @@ const Cloud = {
             document.getElementById('login-overlay')?.classList.add('hidden');
             UI.showToast("Modo Offline Ativado. Seus dados ficarão apenas neste dispositivo.", "warning");
         });
-        document.getElementById('btn-force-sync')?.addEventListener('click', () => this.syncNow());
+        document.getElementById('btn-force-sync')?.addEventListener('click', () => this.syncNow(true));
         document.getElementById('btn-logout')?.addEventListener('click', () => {
             if(confirm("Deseja desconectar da nuvem? Você passará a usar o sistema em Modo Offline.")) {
                 this.logout(false);
@@ -114,10 +112,9 @@ const Cloud = {
                     callback: (tokenResponse) => {
                         if (tokenResponse && tokenResponse.error) {
                             console.warn("Erro no token:", tokenResponse.error);
-                            this.hideLoading();
                             if (localStorage.getItem('sf_auth_choice') === 'google') {
-                                document.getElementById('login-overlay')?.classList.remove('hidden');
-                                UI.showToast("Sessão expirada. Conecte-se novamente.", "warning");
+                                UI.showToast("Nuvem pausada. Trabalhando offline temporariamente.", "warning");
+                                document.getElementById('login-overlay')?.classList.add('hidden'); // Nunca travar se der erro no background
                             }
                             return;
                         }
@@ -136,7 +133,6 @@ const Cloud = {
                 this.checkSession();
             }).catch(e => {
                 console.error("Erro no GAPI", e);
-                this.hideLoading();
             });
         });
     },
@@ -156,24 +152,13 @@ const Cloud = {
                 document.getElementById('login-overlay')?.classList.add('hidden');
                 this.onAuthenticated();
             } else {
-                // Tenta renovar silenciosamente se estiver expirado
-                this.showLoading("Renovando sessão...");
+                // Token expirado: tenta renovar silenciosamente. SEM travar a tela.
                 try {
                     GOOGLE_API.tokenClient.requestAccessToken({ prompt: 'none' });
-                    
-                    // Trava de segurança para mobile: se o Google não responder em 5 segundos, cancela o carregamento
-                    setTimeout(() => {
-                        const loading = document.getElementById('loading-overlay');
-                        if (loading && !loading.classList.contains('hidden') && loading.innerText.includes("Renovando")) {
-                            this.hideLoading();
-                            document.getElementById('login-overlay')?.classList.remove('hidden');
-                            UI.showToast("Renovação bloqueada pelo navegador. Por favor, clique em Entrar.", "warning");
-                        }
-                    }, 5000);
-
+                    document.getElementById('login-overlay')?.classList.add('hidden');
                 } catch (e) {
-                    this.hideLoading();
-                    document.getElementById('login-overlay')?.classList.remove('hidden');
+                    UI.showToast("Nuvem pausada. Trabalhando offline.", "warning");
+                    document.getElementById('login-overlay')?.classList.add('hidden');
                 }
             }
         } else if (authChoice === 'offline') {
@@ -197,8 +182,7 @@ const Cloud = {
                 UI.showToast("Desconectado da Nuvem. Modo offline ativado.", "success");
             } else {
                 localStorage.removeItem('sf_auth_choice'); 
-                UI.showToast("Sessão Expirada na Nuvem. Conecte-se novamente.", "warning");
-                document.getElementById('login-overlay')?.classList.remove('hidden');
+                UI.showToast("Sessão Expirada na Nuvem. Conecte-se novamente em Configurações.", "warning");
             }
             gapi.client.setToken('');
             document.getElementById('btn-google-login')?.classList.remove('hidden');
@@ -216,7 +200,7 @@ const Cloud = {
     onAuthenticated() {
         document.getElementById('btn-google-login')?.classList.add('hidden');
         document.getElementById('cloud-controls')?.classList.remove('hidden');
-        this.syncNow();
+        this.syncNow(false); // Chama o sync inicial silenciosamente (isManual = false)
     },
 
     showLoading(text) {
@@ -236,7 +220,7 @@ const Cloud = {
         if(!window.gapi || !gapi.client || !gapi.client.getToken()) return;
 
         this.saveTimeout = setTimeout(() => {
-            this.uploadToDrive(true);
+            this.uploadToDrive(true); // true = sync invisível
         }, 3000);
     },
 
@@ -256,9 +240,10 @@ const Cloud = {
         } catch (e) { throw e; }
     },
 
-    async syncNow() {
+    async syncNow(isManual = false) {
         if(!GOOGLE_API.isLoaded || !gapi.client.getToken()) return; 
-        this.showLoading("Acessando Pasta...");
+        
+        if(isManual) this.showLoading("Acessando Pasta...");
         
         try {
             GOOGLE_API.folderId = await this.getOrCreateFolder();
@@ -272,29 +257,32 @@ const Cloud = {
             const files = response.result.files;
 
             if (files && files.length > 0) {
-                await this.downloadFromDrive(files[0].id);
+                await this.downloadFromDrive(files[0].id, isManual);
                 this.runBackupCleanup(files); 
             } else {
-                this.showLoading("Criando backup inicial...");
-                await this.uploadToDrive();
+                if(isManual) {
+                    this.hideLoading();
+                    this.showLoading("Criando backup inicial...");
+                }
+                await this.uploadToDrive(isManual ? false : true);
             }
             
-            this.hideLoading();
+            if(isManual) this.hideLoading();
             const statusLabel = document.getElementById('cloud-status');
             if(statusLabel) statusLabel.innerText = "Sincronizado: " + new Date().toLocaleTimeString();
 
         } catch (err) {
             console.error(err);
-            this.hideLoading();
+            if(isManual) this.hideLoading();
             if(err.status === 401 || err.status === 403) {
                 this.logout(true);
             } else {
-                UI.showToast("Erro ao conectar com a nuvem.", "danger");
+                if(isManual) UI.showToast("Erro ao conectar com a nuvem.", "danger");
             }
         }
     },
 
-    async downloadFromDrive(fileId) {
+    async downloadFromDrive(fileId, isManual = false) {
         try {
             const file = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
             
@@ -310,7 +298,7 @@ const Cloud = {
             }
             
             this.lastSyncString = JSON.stringify(data); 
-            UI.showToast("Dados atualizados da nuvem!", "success");
+            if(isManual) UI.showToast("Dados atualizados da nuvem!", "success");
             App.updateAll();
 
         } catch (e) {
@@ -318,7 +306,7 @@ const Cloud = {
             if(e.status === 401 || e.status === 403) {
                 this.logout(true);
             } else {
-                UI.showToast(e.message || "Erro ao ler dados da nuvem", "danger");
+                if(isManual) UI.showToast(e.message || "Erro ao ler dados da nuvem", "danger");
             }
         }
     },
@@ -1484,11 +1472,6 @@ const Emprestimos = {
 // ==========================================
 const App = {
     init() {
-        const authChoice = localStorage.getItem('sf_auth_choice');
-        if (!authChoice) {
-            document.getElementById('login-overlay')?.classList.remove('hidden');
-        }
-
         UI.initTheme();
         UI.initNavegacao();
         Backup.init();
