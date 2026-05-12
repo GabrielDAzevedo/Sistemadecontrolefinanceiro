@@ -353,28 +353,8 @@ select::-ms-expand { display: none; }
     .wallet-tooltip::before { display: none; }
 }
 
-@media (max-width: 520px) {
-    .card h3 { font-size: 12px; margin-bottom: 10px; }
-    .card p { font-size: 22px; }
-    .rendimento-header h3 { font-size: 15px; }
-    .taxa-badge { font-size: 10px; }
-    .saldo-edit-container { flex-wrap: wrap; }
-    .saldo-input { width: 120px; font-size: 14px; }
-    .rendimento-info { flex-direction: column; align-items: flex-start; gap: 6px; }
-    .rv-header { flex-direction: column; align-items: flex-start; gap: 8px; }
-    .rv-row { flex-direction: column; align-items: flex-start; gap: 4px; }
-    .rv-price-update { width: 100%; }
-    .rv-input-price { width: 100%; }
-    .rv-footer { flex-direction: column; align-items: stretch; gap: 8px; }
-    .emp-header { padding: 16px; flex-direction: column; align-items: flex-start; gap: 8px; }
-    .emp-stats { text-align: left; }
-    .emp-progress-container { padding: 0 16px 14px 16px; }
-    .emp-body { padding: 14px 16px; }
-    .emp-progress-text { flex-direction: column; gap: 4px; }
-}
-
 /* ==========================================
-   MELHORIAS DE LAYOUT (EMPRÉSTIMOS 2 COLUNAS)
+   MELHORIAS DE LAYOUT (EMPRÉSTIMOS 2 COLUNAS E RESPONSIVIDADE)
    ========================================== */
 .parcelas-list { 
     display: grid; 
@@ -402,8 +382,36 @@ select::-ms-expand { display: none; }
 }
 
 @media (max-width: 520px) {
+    .card h3 { font-size: 12px; margin-bottom: 10px; }
+    .card p { font-size: 22px; }
+    .rendimento-header h3 { font-size: 15px; }
+    .taxa-badge { font-size: 10px; }
+    .saldo-edit-container { flex-wrap: wrap; }
+    .saldo-input { width: 120px; font-size: 14px; }
+    .rendimento-info { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .rv-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .rv-row { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .rv-price-update { width: 100%; }
+    .rv-input-price { width: 100%; }
+    .rv-footer { flex-direction: column; align-items: stretch; gap: 8px; }
+    .emp-header { padding: 16px; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .emp-stats { text-align: left; }
+    .emp-progress-container { padding: 0 16px 14px 16px; }
+    .emp-body { padding: 14px 16px; }
+    .emp-progress-text { flex-direction: column; gap: 4px; }
+
+    /* Layout duas colunas comprimido no mobile */
     .parcelas-list { gap: 6px; }
     .parcela-item { padding: 8px 10px; }
     .parcela-item span { font-size: 11px; }
     .valor-parcela { font-size: 11px; }
+    
+    /* Oculta os textos dos botões do empréstimo e deixa apenas os ícones */
+    .btn-copy-emp span, .btn-export-emp span, .btn-delete-emp span {
+        display: none;
+    }
+    .btn-copy-emp, .btn-export-emp, .btn-delete-emp {
+        padding: 8px 12px;
+        font-size: 15px; 
+    }
 }
