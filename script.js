@@ -61,7 +61,7 @@ const DB = {
 };
 
 // ==========================================
-// 3. CLOUD SYNC (MOTOR DO GOOGLE DRIVE)
+// 3. CLOUD SYNC E RENOVAÇÃO SILENCIOSA DE SESSÃO
 // ==========================================
 const Cloud = {
     saveTimeout: null,
@@ -84,6 +84,14 @@ const Cloud = {
             client_id: GOOGLE_API.CLIENT_ID,
             scope: GOOGLE_API.SCOPES,
             callback: (tokenResponse) => {
+                if (tokenResponse && tokenResponse.error) {
+                    console.warn("Erro no token:", tokenResponse.error);
+                    if (localStorage.getItem('sf_auth_choice') === 'google') {
+                        document.getElementById('login-overlay')?.classList.remove('hidden');
+                        UI.showToast("Sessão expirada. Conecte-se novamente.", "warning");
+                    }
+                    return;
+                }
                 if (tokenResponse && tokenResponse.access_token) {
                     localStorage.setItem('sf_auth_choice', 'google');
                     localStorage.setItem('sf_google_token', tokenResponse.access_token);
@@ -102,7 +110,7 @@ const Cloud = {
         document.getElementById('btn-initial-login')?.addEventListener('click', () => this.login());
         document.getElementById('btn-initial-offline')?.addEventListener('click', () => {
             localStorage.setItem('sf_auth_choice', 'offline');
-            document.getElementById('login-overlay').classList.add('hidden');
+            document.getElementById('login-overlay')?.classList.add('hidden');
             UI.showToast("Modo Offline Ativado. Seus dados ficarão apenas neste dispositivo.", "warning");
         });
         document.getElementById('btn-force-sync')?.addEventListener('click', () => this.syncNow());
@@ -115,33 +123,28 @@ const Cloud = {
         const authChoice = localStorage.getItem('sf_auth_choice');
         const now = Date.now();
         
-        // Validade de 55 minutos para o token
+        // Verifica se o token tem menos de 55 minutos (o limite do Google é 60m)
         const isTokenValid = savedToken && tokenTime && (now - parseInt(tokenTime) < 3300000);
 
-        if (isTokenValid) {
-            gapi.client.setToken({ access_token: savedToken });
-            const loginOverlay = document.getElementById('login-overlay');
-            if(loginOverlay) loginOverlay.classList.add('hidden');
-            this.onAuthenticated();
-        } else {
-            localStorage.removeItem('sf_google_token');
-            localStorage.removeItem('sf_google_token_time');
-            gapi.client.setToken('');
-            
-            if (authChoice === 'google') {
-                const loginOverlay = document.getElementById('login-overlay');
-                if(loginOverlay) loginOverlay.classList.add('hidden');
-                
-                document.getElementById('btn-google-login')?.classList.remove('hidden');
-                document.getElementById('cloud-controls')?.classList.add('hidden');
-                console.log("Sessão da nuvem expirou. Sincronização pausada.");
-            } else if (authChoice === 'offline') {
-                const loginOverlay = document.getElementById('login-overlay');
-                if(loginOverlay) loginOverlay.classList.add('hidden');
+        if (authChoice === 'google') {
+            if (isTokenValid) {
+                gapi.client.setToken({ access_token: savedToken });
+                document.getElementById('login-overlay')?.classList.add('hidden');
+                this.onAuthenticated();
             } else {
-                const overlay = document.getElementById('login-overlay');
-                if(overlay) overlay.classList.remove('hidden');
+                // Tenta renovar silenciosamente sem pop-up caso o token tenha expirado
+                try {
+                    GOOGLE_API.tokenClient.requestAccessToken({ prompt: 'none' });
+                } catch (e) {
+                    console.error("Falha ao tentar renovar silenciosamente.", e);
+                    document.getElementById('login-overlay')?.classList.remove('hidden');
+                }
             }
+        } else if (authChoice === 'offline') {
+            document.getElementById('login-overlay')?.classList.add('hidden');
+        } else {
+            // Nenhum registro (Gatekeeper - primeira vez que abre o app)
+            document.getElementById('login-overlay')?.classList.remove('hidden');
         }
     },
 
@@ -155,17 +158,19 @@ const Cloud = {
             localStorage.removeItem('sf_google_token');
             localStorage.removeItem('sf_google_token_time');
             if (!isExpired) {
-                localStorage.setItem('sf_auth_choice', 'offline');
+                // Se foi logout manual, reseta a escolha para forçar a tela inicial depois
+                localStorage.removeItem('sf_auth_choice'); 
             }
             gapi.client.setToken('');
             document.getElementById('btn-google-login')?.classList.remove('hidden');
             document.getElementById('cloud-controls')?.classList.add('hidden');
             
             if (isExpired) {
-                UI.showToast("Sessão Expirada na Nuvem. Faça login novamente em Configurações.", "warning");
+                UI.showToast("Sessão Expirada na Nuvem. Faça login novamente.", "warning");
             } else {
                 UI.showToast("Desconectado da Nuvem", "success");
             }
+            document.getElementById('login-overlay')?.classList.remove('hidden');
         };
 
         const token = gapi.client.getToken();
@@ -1266,7 +1271,7 @@ const Emprestimos = {
                 App.updateAll();
             }
 
-            // Função auxiliar para preparar e tirar a foto
+            // Lógica para Copiar ou Baixar o Recibo em Imagem
             const btnCopy = e.target.closest('.btn-copy-emp');
             const btnExport = e.target.closest('.btn-export-emp');
             
@@ -1361,7 +1366,7 @@ const Emprestimos = {
                     <div class="emp-body-header">
                         <h4>Controle</h4>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> <span>Copiar Recibo</span></button>
+                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> <span>Copiar</span></button>
                             <button class="btn-export-emp" data-id="${emp.id}" title="Baixar comprovante de evolução em imagem"><i class="fa-solid fa-download"></i> <span>Baixar</span></button>
                             <button class="btn-delete-emp" data-id="${emp.id}"><i class="fa-solid fa-trash"></i> <span>Apagar</span></button>
                         </div>
@@ -1391,6 +1396,11 @@ const Emprestimos = {
 // ==========================================
 const App = {
     init() {
+        const authChoice = localStorage.getItem('sf_auth_choice');
+        if (!authChoice) {
+            document.getElementById('login-overlay')?.classList.remove('hidden');
+        }
+
         UI.initTheme();
         UI.initNavegacao();
         Cloud.init(); 
