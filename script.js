@@ -65,7 +65,7 @@ const DB = {
 // ==========================================
 const Cloud = {
     saveTimeout: null,
-    lastSyncString: null, // Usado para a sincronização diferencial sem criptografia
+    lastSyncString: null, 
 
     init() {
         if (!window.gapi || !window.google) return console.error("Scripts do Google não carregados.");
@@ -166,7 +166,6 @@ const Cloud = {
         try {
             GOOGLE_API.folderId = await this.getOrCreateFolder();
 
-            // Busca todos os backups na nuvem
             const response = await gapi.client.drive.files.list({
                 q: `name contains 'financas_backup_' and '${GOOGLE_API.folderId}' in parents and trashed=false`,
                 orderBy: 'createdTime desc',
@@ -177,7 +176,7 @@ const Cloud = {
 
             if (files && files.length > 0) {
                 await this.downloadFromDrive(files[0].id);
-                this.runBackupCleanup(files); // Limpa versões antigas
+                this.runBackupCleanup(files); 
             } else {
                 this.showLoading("Criando backup inicial...");
                 await this.uploadToDrive();
@@ -210,7 +209,7 @@ const Cloud = {
                 if (key.startsWith('sf_')) localStorage.setItem(key, data[key]);
             }
             
-            this.lastSyncString = JSON.stringify(data); // Guarda o estado baixado
+            this.lastSyncString = JSON.stringify(data); 
             UI.showToast("Dados atualizados da nuvem!", "success");
             App.updateAll();
 
@@ -231,14 +230,13 @@ const Cloud = {
         
         const currentStateString = JSON.stringify(data);
 
-        // DELTA SYNC: Verifica se a string atual é igual à última salva
         if (this.lastSyncString === currentStateString) {
             if(!isSilent) console.log("Sem alterações detectadas. Upload ignorado para economizar dados.");
             return;
         }
 
         const dataAtual = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileName = `financas_backup_${dataAtual}.json`; // Agora com timestamp para versionamento
+        const fileName = `financas_backup_${dataAtual}.json`; 
 
         const metadata = { name: fileName, mimeType: 'application/json', parents: [GOOGLE_API.folderId] };
         
@@ -261,7 +259,7 @@ const Cloud = {
                 body: multipartRequestBody
             });
 
-            this.lastSyncString = currentStateString; // Atualiza a trava do delta sync
+            this.lastSyncString = currentStateString; 
             if(!isSilent) UI.showToast("Backup salvo na nuvem!", "success");
             
             const statusLabel = document.getElementById('cloud-status');
@@ -274,7 +272,6 @@ const Cloud = {
     },
 
     async runBackupCleanup(files) {
-        // VERSIONAMENTO: Mantém apenas os 5 arquivos mais recentes e apaga o resto
         if (files && files.length > 5) {
             for (let i = 5; i < files.length; i++) {
                 try { await gapi.client.drive.files.delete({ fileId: files[i].id }); } 
@@ -337,7 +334,6 @@ const UI = {
 
         if (salvar) localStorage.setItem('sf_aba_ativa', targetId);
 
-        // Gatilho do Lazy Load
         if (targetId === 'dashboard') {
             Dashboard.render(); 
         }
@@ -1151,6 +1147,7 @@ const Emprestimos = {
         });
 
         document.getElementById('lista-emprestimos')?.addEventListener('click', (e) => {
+            // Lógica de Checkbox das Parcelas
             if(e.target.classList.contains('parcela-check')) {
                 let emps = DB.getEmprestimos();
                 const empId = parseInt(e.target.dataset.emp);
@@ -1194,7 +1191,78 @@ const Emprestimos = {
                 DB.setTransacoes(trans);
                 App.updateAll();
             }
+
+            // Função auxiliar para preparar e tirar a foto
+            const btnCopy = e.target.closest('.btn-copy-emp');
+            const btnExport = e.target.closest('.btn-export-emp');
             
+            if(btnCopy || btnExport) {
+                const isCopy = !!btnCopy;
+                const botao = isCopy ? btnCopy : btnExport;
+                const card = botao.closest('.emp-card');
+                const controleHeader = card.querySelector('.emp-body-header');
+                const receiptDate = card.querySelector('.emp-receipt-date');
+                const iconeOriginal = botao.innerHTML;
+                const larguraOriginal = card.style.width;
+                
+                // Prepara a interface (Fixa largura, aplica classe, esconde controle)
+                card.style.width = card.offsetWidth + 'px'; 
+                card.classList.add('export-mode');
+                controleHeader.style.display = 'none';
+                receiptDate.querySelector('.receipt-date-text').innerText = new Date().toLocaleString('pt-BR');
+                receiptDate.classList.remove('hidden');
+                
+                botao.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${isCopy ? 'Copiando...' : 'Baixando...'}`;
+
+                setTimeout(() => {
+                    html2canvas(card, {
+                        backgroundColor: document.body.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff',
+                        scale: 2 
+                    }).then(canvas => {
+                        // Restaura a interface
+                        card.style.width = larguraOriginal;
+                        card.classList.remove('export-mode');
+                        controleHeader.style.display = 'flex';
+                        receiptDate.classList.add('hidden');
+                        
+                        if (isCopy) {
+                            canvas.toBlob(blob => {
+                                if (blob) {
+                                    try {
+                                        const item = new ClipboardItem({ "image/png": blob });
+                                        navigator.clipboard.write([item]).then(() => {
+                                            botao.classList.add('success');
+                                            botao.innerHTML = '<i class="fa-solid fa-check"></i> Copiado!';
+                                            UI.showToast("Recibo copiado para a área de transferência!", "success");
+                                            setTimeout(() => {
+                                                botao.classList.remove('success');
+                                                botao.innerHTML = iconeOriginal;
+                                            }, 2000);
+                                        }).catch(err => {
+                                            console.error("Erro ao copiar imagem:", err);
+                                            botao.innerHTML = iconeOriginal;
+                                            UI.showToast("Seu navegador bloqueou a cópia direta. Use o botão Baixar.", "warning");
+                                        });
+                                    } catch (error) {
+                                         console.error("Clipboard API falhou:", error);
+                                         botao.innerHTML = iconeOriginal;
+                                         UI.showToast("Área de transferência não suportada neste dispositivo.", "danger");
+                                    }
+                                }
+                            }, 'image/png');
+                        } else {
+                            botao.innerHTML = iconeOriginal;
+                            const link = document.createElement('a');
+                            const nomeEmp = DB.getEmprestimos().find(x => x.id === parseInt(botao.dataset.id))?.nome || 'Emprestimo';
+                            link.download = `Demonstrativo_${nomeEmp}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.png`;
+                            link.href = canvas.toDataURL('image/png');
+                            link.click();
+                        }
+                    });
+                }, 300);
+            }
+
+            // Lógica de Apagar Empréstimo
             const btnDel = e.target.closest('.btn-delete-emp');
             if(btnDel && confirm("Apagar empréstimo permanentemente? (As transações já gravadas no Descritivo NÃO serão apagadas automaticamente)")) {
                 DB.setEmprestimos(DB.getEmprestimos().filter(emp => emp.id !== parseInt(btnDel.dataset.id)));
@@ -1218,7 +1286,14 @@ const Emprestimos = {
                     <div class="emp-progress-bar"><div class="emp-progress-fill" style="width: ${(pagas/emp.prazo)*100}%;"></div></div>
                 </div>
                 <div class="emp-body">
-                    <div class="emp-body-header"><h4>Controle</h4><button class="btn-delete-emp" data-id="${emp.id}"><i class="fa-solid fa-trash"></i> Apagar</button></div>
+                    <div class="emp-body-header">
+                        <h4>Controle</h4>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> Copiar Recibo</button>
+                            <button class="btn-export-emp" data-id="${emp.id}" title="Baixar comprovante de evolução em imagem"><i class="fa-solid fa-download"></i> Baixar</button>
+                            <button class="btn-delete-emp" data-id="${emp.id}"><i class="fa-solid fa-trash"></i> Apagar</button>
+                        </div>
+                    </div>
                     <div class="parcelas-list">
                         ${emp.parcelas.map((p, i) => `
                             <label class="parcela-item ${p.paga ? 'paga' : ''}">
@@ -1229,6 +1304,9 @@ const Emprestimos = {
                                 <span class="valor-parcela">${emp.valorParcela.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
                             </label>
                         `).join('')}
+                    </div>
+                    <div class="emp-receipt-date hidden" style="text-align: center; font-size: 11px; color: var(--text-placeholder); margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                        Status posicionado em: <strong class="receipt-date-text"></strong>
                     </div>
                 </div>
             </div>`;
