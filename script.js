@@ -114,7 +114,7 @@ const Cloud = {
                             console.warn("Erro no token:", tokenResponse.error);
                             if (localStorage.getItem('sf_auth_choice') === 'google') {
                                 UI.showToast("Nuvem pausada. Trabalhando offline temporariamente.", "warning");
-                                document.getElementById('login-overlay')?.classList.add('hidden'); // Nunca travar se der erro no background
+                                document.getElementById('login-overlay')?.classList.add('hidden'); 
                             }
                             return;
                         }
@@ -143,7 +143,6 @@ const Cloud = {
         const authChoice = localStorage.getItem('sf_auth_choice');
         const now = Date.now();
         
-        // Verifica se o token tem menos de 50 minutos (Google expira em 60m)
         const isTokenValid = savedToken && tokenTime && (now - parseInt(tokenTime) < 3000000);
 
         if (authChoice === 'google') {
@@ -152,7 +151,6 @@ const Cloud = {
                 document.getElementById('login-overlay')?.classList.add('hidden');
                 this.onAuthenticated();
             } else {
-                // Token expirado: tenta renovar silenciosamente. SEM travar a tela.
                 try {
                     GOOGLE_API.tokenClient.requestAccessToken({ prompt: 'none' });
                     document.getElementById('login-overlay')?.classList.add('hidden');
@@ -181,7 +179,6 @@ const Cloud = {
                 localStorage.setItem('sf_auth_choice', 'offline');
                 UI.showToast("Desconectado da Nuvem. Modo offline ativado.", "success");
             } else {
-                localStorage.removeItem('sf_auth_choice'); 
                 UI.showToast("Sessão Expirada na Nuvem. Conecte-se novamente em Configurações.", "warning");
             }
             gapi.client.setToken('');
@@ -200,7 +197,7 @@ const Cloud = {
     onAuthenticated() {
         document.getElementById('btn-google-login')?.classList.add('hidden');
         document.getElementById('cloud-controls')?.classList.remove('hidden');
-        this.syncNow(false); // Chama o sync inicial silenciosamente (isManual = false)
+        this.syncNow(false); 
     },
 
     showLoading(text) {
@@ -220,7 +217,7 @@ const Cloud = {
         if(!window.gapi || !gapi.client || !gapi.client.getToken()) return;
 
         this.saveTimeout = setTimeout(() => {
-            this.uploadToDrive(true); // true = sync invisível
+            this.uploadToDrive(true); 
         }, 3000);
     },
 
@@ -435,9 +432,9 @@ const UI = {
         if (fab) {
             fab.innerHTML = '<i class="fa-solid fa-plus"></i>';
             if (targetId === 'dashboard' || targetId === 'rendimentos' || targetId === 'configuracoes') {
-                fab.classList.add('hidden'); // Oculta o FAB nestas abas
+                fab.classList.add('hidden'); 
             } else {
-                fab.classList.remove('hidden'); // Mostra nas outras (Descritivos, Empréstimos, RV)
+                fab.classList.remove('hidden'); 
             }
         }
         
