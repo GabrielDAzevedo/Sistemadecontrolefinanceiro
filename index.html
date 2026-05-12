@@ -3,28 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Controle Financeiro</title>
+    <title>Meu Sistema Financeiro</title>
     
-    <!-- PWA -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#3b82f6">
     <link rel="apple-touch-icon" href="favicon.png">
     <link rel="icon" href="favicon.png">
     
-    <!-- Fontes e Ícones -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Bibliotecas (Gráficos e Google API) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
     <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     
-    <!-- Modal de Carregamento para Nuvem -->
     <div id="loading-overlay" class="loading-overlay hidden">
         <div class="spinner"></div>
         <p id="loading-text">Sincronizando com o Google Drive...</p>
@@ -173,7 +170,6 @@
                 </header>
                 
                 <div class="cards" id="bancos-container">
-                    <!-- Nubank -->
                     <div class="card rendimento-card expand-action">
                         <div class="card-icon nubank-icon"><i class="fa-solid fa-building-columns"></i></div>
                         <div class="rendimento-header">
@@ -210,7 +206,6 @@
                         </div>
                     </div>
 
-                    <!-- Mercado Pago -->
                     <div class="card rendimento-card expand-action">
                         <div class="card-icon mp-icon"><i class="fa-solid fa-handshake"></i></div>
                         <div class="rendimento-header">
@@ -247,7 +242,6 @@
                         </div>
                     </div>
 
-                    <!-- PicPay -->
                     <div class="card rendimento-card expand-action">
                         <div class="card-icon picpay-icon"><i class="fa-solid fa-wallet"></i></div>
                         <div class="rendimento-header">
@@ -416,7 +410,6 @@
 
                 <div class="cards" style="grid-template-columns: 1fr;">
                     
-                    <!-- Card Google Drive -->
                     <div class="card" style="border-left: 5px solid var(--success);">
                         <div class="card-icon"><i class="fa-brands fa-google"></i></div>
                         <h3 style="font-size: 16px; margin-bottom: 10px; color: var(--text-main);">Sincronização com Google Drive</h3>
@@ -447,7 +440,6 @@
                         </div>
                     </div>
 
-                    <!-- Card Backup Local -->
                     <div class="card" style="border-left: 5px solid var(--primary);">
                         <div class="card-icon"><i class="fa-solid fa-shield-halved"></i></div>
                         <h3 style="font-size: 16px; margin-bottom: 10px; color: var(--text-main);">Backup Local Offline (JSON)</h3>
@@ -471,7 +463,6 @@
         </main>
     </div>
 
-    <!-- UX Mobile: Floating Action Button (Ação Rápida) -->
     <button id="fab-add-tx" class="fab-btn" title="Nova Transação"><i class="fa-solid fa-plus"></i></button>
 
     <script src="script.js"></script>
