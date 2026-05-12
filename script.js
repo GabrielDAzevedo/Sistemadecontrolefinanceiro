@@ -76,11 +76,7 @@ const Cloud = {
                 discoveryDocs: [GOOGLE_API.DISCOVERY_DOC]
             }).then(() => {
                 GOOGLE_API.isLoaded = true;
-                const savedToken = sessionStorage.getItem('sf_google_token');
-                if (savedToken) {
-                    gapi.client.setToken({ access_token: savedToken });
-                    this.onAuthenticated();
-                }
+                this.checkSession();
             }).catch(e => console.error("Erro no GAPI", e));
         });
 
@@ -88,13 +84,45 @@ const Cloud = {
             client_id: GOOGLE_API.CLIENT_ID,
             scope: GOOGLE_API.SCOPES,
             callback: (tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) this.onAuthenticated();
+                if (tokenResponse && tokenResponse.access_token) {
+                    localStorage.setItem('sf_google_token', tokenResponse.access_token);
+                    localStorage.setItem('sf_google_token_time', Date.now().toString());
+                    gapi.client.setToken({ access_token: tokenResponse.access_token });
+                    
+                    const loginOverlay = document.getElementById('login-overlay');
+                    if(loginOverlay) loginOverlay.classList.add('hidden');
+                    
+                    this.onAuthenticated();
+                }
             }
         });
 
         document.getElementById('btn-google-login')?.addEventListener('click', () => this.login());
+        document.getElementById('btn-initial-login')?.addEventListener('click', () => this.login());
+        document.getElementById('btn-initial-offline')?.addEventListener('click', () => {
+            document.getElementById('login-overlay').classList.add('hidden');
+            UI.showToast("Modo Offline. Seus dados não serão salvos na nuvem automaticamente.", "warning");
+        });
         document.getElementById('btn-force-sync')?.addEventListener('click', () => this.syncNow());
-        document.getElementById('btn-logout')?.addEventListener('click', () => this.logout());
+        document.getElementById('btn-logout')?.addEventListener('click', () => this.logout(false));
+    },
+
+    checkSession() {
+        const savedToken = localStorage.getItem('sf_google_token');
+        const tokenTime = localStorage.getItem('sf_google_token_time');
+        const now = Date.now();
+        
+        // Google tokens expire in ~3600 seconds. Check within a safe threshold (3.3M ms = ~55 mins)
+        if (savedToken && tokenTime && (now - parseInt(tokenTime) < 3300000)) {
+            gapi.client.setToken({ access_token: savedToken });
+            this.onAuthenticated();
+        } else {
+            localStorage.removeItem('sf_google_token');
+            localStorage.removeItem('sf_google_token_time');
+            gapi.client.setToken('');
+            const overlay = document.getElementById('login-overlay');
+            if(overlay) overlay.classList.remove('hidden');
+        }
     },
 
     login() {
@@ -102,21 +130,31 @@ const Cloud = {
         GOOGLE_API.tokenClient.requestAccessToken();
     },
 
-    logout() {
-        const token = gapi.client.getToken();
-        if (token !== null) {
-            google.accounts.oauth2.revoke(token.access_token, () => {
-                gapi.client.setToken('');
-                sessionStorage.removeItem('sf_google_token');
-                document.getElementById('btn-google-login')?.classList.remove('hidden');
-                document.getElementById('cloud-controls')?.classList.add('hidden');
+    logout(isExpired = false) {
+        const clearLocal = () => {
+            localStorage.removeItem('sf_google_token');
+            localStorage.removeItem('sf_google_token_time');
+            gapi.client.setToken('');
+            document.getElementById('btn-google-login')?.classList.remove('hidden');
+            document.getElementById('cloud-controls')?.classList.add('hidden');
+            
+            if (isExpired) {
+                UI.showToast("Sessão Expirada na Nuvem. Faça login novamente.", "warning");
+                document.getElementById('login-overlay')?.classList.remove('hidden');
+            } else {
                 UI.showToast("Desconectado da Nuvem", "success");
-            });
+            }
+        };
+
+        const token = gapi.client.getToken();
+        if (token !== null && !isExpired) {
+            google.accounts.oauth2.revoke(token.access_token, clearLocal);
+        } else {
+            clearLocal();
         }
     },
 
     onAuthenticated() {
-        sessionStorage.setItem('sf_google_token', gapi.client.getToken().access_token);
         document.getElementById('btn-google-login')?.classList.add('hidden');
         document.getElementById('cloud-controls')?.classList.remove('hidden');
         this.syncNow();
@@ -160,7 +198,7 @@ const Cloud = {
     },
 
     async syncNow() {
-        if(!GOOGLE_API.isLoaded || !gapi.client.getToken()) return this.login();
+        if(!GOOGLE_API.isLoaded || !gapi.client.getToken()) return; // Aborta silenciosamente em modo offline
         this.showLoading("Acessando Pasta...");
         
         try {
@@ -189,8 +227,11 @@ const Cloud = {
         } catch (err) {
             console.error(err);
             this.hideLoading();
-            UI.showToast("Erro ao conectar com a nuvem.", "danger");
-            if(err.status === 401 || err.status === 403) this.logout();
+            if(err.status === 401 || err.status === 403) {
+                this.logout(true);
+            } else {
+                UI.showToast("Erro ao conectar com a nuvem.", "danger");
+            }
         }
     },
 
@@ -215,7 +256,11 @@ const Cloud = {
 
         } catch (e) {
             console.error("Erro no Download", e);
-            UI.showToast(e.message || "Erro ao ler dados da nuvem", "danger");
+            if(e.status === 401 || e.status === 403) {
+                this.logout(true);
+            } else {
+                UI.showToast(e.message || "Erro ao ler dados da nuvem", "danger");
+            }
         }
     },
 
@@ -267,7 +312,11 @@ const Cloud = {
 
         } catch (e) {
             console.error("Erro no Upload", e);
-            if(!isSilent) UI.showToast("Falha ao subir para nuvem", "danger");
+            if(e.status === 401 || e.status === 403) {
+                this.logout(true);
+            } else if(!isSilent) {
+                UI.showToast("Falha ao subir para nuvem", "danger");
+            }
         }
     },
 
@@ -1205,7 +1254,7 @@ const Emprestimos = {
                 const iconeOriginal = botao.innerHTML;
                 const larguraOriginal = card.style.width;
                 
-                // Prepara a interface (Fixa largura, aplica classe, esconde controle)
+                // Prepara a interface (Fixa largura real, aplica classe que preserva borda, esconde controle)
                 card.style.width = card.offsetWidth + 'px'; 
                 card.classList.add('export-mode');
                 controleHeader.style.display = 'none';
