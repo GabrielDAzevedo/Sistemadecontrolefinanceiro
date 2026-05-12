@@ -68,43 +68,15 @@ const Cloud = {
     lastSyncString: null, 
 
     init() {
-        if (!window.gapi || !window.google) return console.error("Scripts do Google não carregados.");
-
-        gapi.load('client', () => {
-            gapi.client.init({
-                apiKey: GOOGLE_API.API_KEY,
-                discoveryDocs: [GOOGLE_API.DISCOVERY_DOC]
-            }).then(() => {
-                GOOGLE_API.isLoaded = true;
-                this.checkSession();
-            }).catch(e => console.error("Erro no GAPI", e));
-        });
-
-        GOOGLE_API.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_API.CLIENT_ID,
-            scope: GOOGLE_API.SCOPES,
-            callback: (tokenResponse) => {
-                if (tokenResponse && tokenResponse.error) {
-                    console.warn("Erro no token:", tokenResponse.error);
-                    if (localStorage.getItem('sf_auth_choice') === 'google') {
-                        document.getElementById('login-overlay')?.classList.remove('hidden');
-                        UI.showToast("Sessão expirada. Conecte-se novamente.", "warning");
-                    }
-                    return;
-                }
-                if (tokenResponse && tokenResponse.access_token) {
-                    localStorage.setItem('sf_auth_choice', 'google');
-                    localStorage.setItem('sf_google_token', tokenResponse.access_token);
-                    localStorage.setItem('sf_google_token_time', Date.now().toString());
-                    gapi.client.setToken({ access_token: tokenResponse.access_token });
-                    
-                    const loginOverlay = document.getElementById('login-overlay');
-                    if(loginOverlay) loginOverlay.classList.add('hidden');
-                    
-                    this.onAuthenticated();
-                }
-            }
-        });
+        const authChoice = localStorage.getItem('sf_auth_choice');
+        
+        if (authChoice === 'google') {
+            this.showLoading("Verificando sessão...");
+        } else if (authChoice === 'offline') {
+            document.getElementById('login-overlay')?.classList.add('hidden');
+        } else {
+            document.getElementById('login-overlay')?.classList.remove('hidden');
+        }
 
         document.getElementById('btn-google-login')?.addEventListener('click', () => this.login());
         document.getElementById('btn-initial-login')?.addEventListener('click', () => this.login());
@@ -114,7 +86,59 @@ const Cloud = {
             UI.showToast("Modo Offline Ativado. Seus dados ficarão apenas neste dispositivo.", "warning");
         });
         document.getElementById('btn-force-sync')?.addEventListener('click', () => this.syncNow());
-        document.getElementById('btn-logout')?.addEventListener('click', () => this.logout(false));
+        document.getElementById('btn-logout')?.addEventListener('click', () => {
+            if(confirm("Deseja desconectar da nuvem? Você passará a usar o sistema em Modo Offline.")) {
+                this.logout(false);
+            }
+        });
+
+        this.loadScripts();
+    },
+
+    loadScripts() {
+        if (!window.gapi || !window.google) {
+            setTimeout(() => this.loadScripts(), 100);
+            return;
+        }
+
+        gapi.load('client', () => {
+            gapi.client.init({
+                apiKey: GOOGLE_API.API_KEY,
+                discoveryDocs: [GOOGLE_API.DISCOVERY_DOC]
+            }).then(() => {
+                GOOGLE_API.isLoaded = true;
+                
+                GOOGLE_API.tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: GOOGLE_API.CLIENT_ID,
+                    scope: GOOGLE_API.SCOPES,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse && tokenResponse.error) {
+                            console.warn("Erro no token:", tokenResponse.error);
+                            this.hideLoading();
+                            if (localStorage.getItem('sf_auth_choice') === 'google') {
+                                document.getElementById('login-overlay')?.classList.remove('hidden');
+                                UI.showToast("Sessão expirada. Conecte-se novamente.", "warning");
+                            }
+                            return;
+                        }
+                        if (tokenResponse && tokenResponse.access_token) {
+                            localStorage.setItem('sf_auth_choice', 'google');
+                            localStorage.setItem('sf_google_token', tokenResponse.access_token);
+                            localStorage.setItem('sf_google_token_time', Date.now().toString());
+                            gapi.client.setToken({ access_token: tokenResponse.access_token });
+                            
+                            document.getElementById('login-overlay')?.classList.add('hidden');
+                            this.onAuthenticated();
+                        }
+                    }
+                });
+
+                this.checkSession();
+            }).catch(e => {
+                console.error("Erro no GAPI", e);
+                this.hideLoading();
+            });
+        });
     },
 
     checkSession() {
@@ -123,8 +147,8 @@ const Cloud = {
         const authChoice = localStorage.getItem('sf_auth_choice');
         const now = Date.now();
         
-        // Verifica se o token tem menos de 55 minutos (o limite do Google é 60m)
-        const isTokenValid = savedToken && tokenTime && (now - parseInt(tokenTime) < 3300000);
+        // Verifica se o token tem menos de 50 minutos (Google expira em 60m)
+        const isTokenValid = savedToken && tokenTime && (now - parseInt(tokenTime) < 3000000);
 
         if (authChoice === 'google') {
             if (isTokenValid) {
@@ -132,24 +156,22 @@ const Cloud = {
                 document.getElementById('login-overlay')?.classList.add('hidden');
                 this.onAuthenticated();
             } else {
-                // Tenta renovar silenciosamente sem pop-up caso o token tenha expirado
+                // Tenta renovar silenciosamente se estiver expirado
+                this.showLoading("Renovando sessão...");
                 try {
                     GOOGLE_API.tokenClient.requestAccessToken({ prompt: 'none' });
                 } catch (e) {
-                    console.error("Falha ao tentar renovar silenciosamente.", e);
+                    this.hideLoading();
                     document.getElementById('login-overlay')?.classList.remove('hidden');
                 }
             }
-        } else if (authChoice === 'offline') {
-            document.getElementById('login-overlay')?.classList.add('hidden');
         } else {
-            // Nenhum registro (Gatekeeper - primeira vez que abre o app)
-            document.getElementById('login-overlay')?.classList.remove('hidden');
+            this.hideLoading();
         }
     },
 
     login() {
-        if (!GOOGLE_API.tokenClient) return UI.showToast("Google Client não iniciado.", "danger");
+        if (!GOOGLE_API.tokenClient) return UI.showToast("Carregando serviços do Google...", "warning");
         GOOGLE_API.tokenClient.requestAccessToken();
     },
 
@@ -158,19 +180,16 @@ const Cloud = {
             localStorage.removeItem('sf_google_token');
             localStorage.removeItem('sf_google_token_time');
             if (!isExpired) {
-                // Se foi logout manual, reseta a escolha para forçar a tela inicial depois
+                localStorage.setItem('sf_auth_choice', 'offline');
+                UI.showToast("Desconectado da Nuvem. Modo offline ativado.", "success");
+            } else {
                 localStorage.removeItem('sf_auth_choice'); 
+                UI.showToast("Sessão Expirada na Nuvem. Conecte-se novamente.", "warning");
+                document.getElementById('login-overlay')?.classList.remove('hidden');
             }
             gapi.client.setToken('');
             document.getElementById('btn-google-login')?.classList.remove('hidden');
             document.getElementById('cloud-controls')?.classList.add('hidden');
-            
-            if (isExpired) {
-                UI.showToast("Sessão Expirada na Nuvem. Faça login novamente.", "warning");
-            } else {
-                UI.showToast("Desconectado da Nuvem", "success");
-            }
-            document.getElementById('login-overlay')?.classList.remove('hidden');
         };
 
         const token = gapi.client.getToken();
@@ -1037,20 +1056,24 @@ const Caixinhas = {
                 this.esconderInputs(banco);
                 App.updateAll();
             }
-        });
 
-        window.removerHistoricoBanco = (banco, idx) => {
-            if(!confirm("Remover o registro do histórico?")) return;
-            let bancos = DB.getBancos();
-            const reg = bancos[banco].historico[idx];
-            
-            if (reg.tipo === 'rendimento' || reg.tipo === 'aporte') bancos[banco].saldo = Math.max(0, bancos[banco].saldo - reg.valorMovimento);
-            else if (reg.tipo === 'retirada') bancos[banco].saldo += reg.valorMovimento;
-            
-            bancos[banco].historico.splice(idx, 1);
-            DB.setBancos(bancos);
-            App.updateAll();
-        };
+            // Otimização: Delegação de eventos para remoção do histórico
+            const btnDelHist = e.target.closest('.btn-delete-hist');
+            if(btnDelHist) {
+                if(!confirm("Remover o registro do histórico?")) return;
+                const banco = btnDelHist.dataset.banco;
+                const idx = parseInt(btnDelHist.dataset.idx);
+                let bancos = DB.getBancos();
+                const reg = bancos[banco].historico[idx];
+                
+                if (reg.tipo === 'rendimento' || reg.tipo === 'aporte') bancos[banco].saldo = Math.max(0, bancos[banco].saldo - reg.valorMovimento);
+                else if (reg.tipo === 'retirada') bancos[banco].saldo += reg.valorMovimento;
+                
+                bancos[banco].historico.splice(idx, 1);
+                DB.setBancos(bancos);
+                App.updateAll();
+            }
+        });
     },
 
     esconderInputs(banco) {
@@ -1101,7 +1124,7 @@ const Caixinhas = {
                     </div>
                     <span style="display: flex; align-items: center;">
                         <span class="${isYield ? 'hist-yield' : 'hist-withdraw'}">${isYield ? '+' : '-'} ${h.valorMovimento.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>
-                        <button class="btn-action btn-delete" onclick="removerHistoricoBanco('${banco}', ${i})" style="margin-left: 8px;"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn-action btn-delete-hist" data-banco="${banco}" data-idx="${i}" style="margin-left: 8px;"><i class="fa-solid fa-trash"></i></button>
                     </span>
                 </div>`;
             }).join('') : '<p style="text-align:center; color:var(--text-placeholder); font-size: 11px;">Nenhum registro.</p>';
@@ -1133,27 +1156,45 @@ const RV = {
             App.updateAll();
         });
 
-        window.apagarAtivo = (id) => {
-            if(confirm("Apagar ativo?")) { DB.setAtivos(DB.getAtivos().filter(a => a.id !== id)); App.updateAll(); }
-        };
-        window.atualizarPrecoAtivo = (id) => {
-            const ativos = DB.getAtivos();
-            const ativo = ativos.find(a => a.id === id);
-            const val = parseFloat(document.getElementById(`patual-${id}`).value);
-            if(ativo && !isNaN(val)) { ativo.precoAtual = val; DB.setAtivos(ativos); App.updateAll(); UI.showToast("Cotação atualizada."); }
-        };
-        window.receberDividendo = (id) => {
-            const ativo = DB.getAtivos().find(a => a.id === id);
-            const val = parseFloat(prompt(`Valor do dividendo de ${ativo.ticker.toUpperCase()} (R$):`));
-            if(!isNaN(val) && val > 0) {
-                DB.setCC(DB.getCC() + val);
-                let t = DB.getTransacoes();
-                t.unshift({ id: Date.now(), data: new Date().toISOString().split('T')[0], desc: `Dividendo - ${ativo.ticker}`, cat: 'Outros', valor: val, tipo: 'entrada' });
-                DB.setTransacoes(t);
-                App.updateAll();
-                UI.showToast("Provento adicionado à C.C.");
+        // Otimização: Delegação de eventos centralizada para Renda Variável
+        document.getElementById('lista-ativos')?.addEventListener('click', (e) => {
+            const btnDel = e.target.closest('.btn-delete-rv');
+            const btnUpd = e.target.closest('.btn-update-price');
+            const btnDiv = e.target.closest('.btn-dividend-rv');
+
+            if(btnDel) {
+                const id = parseInt(btnDel.dataset.id);
+                if(confirm("Apagar ativo?")) { 
+                    DB.setAtivos(DB.getAtivos().filter(a => a.id !== id)); 
+                    App.updateAll(); 
+                }
             }
-        }
+            if(btnUpd) {
+                const id = parseInt(btnUpd.dataset.id);
+                const ativos = DB.getAtivos();
+                const ativo = ativos.find(a => a.id === id);
+                const val = parseFloat(document.getElementById(`patual-${id}`).value);
+                if(ativo && !isNaN(val)) { 
+                    ativo.precoAtual = val; 
+                    DB.setAtivos(ativos); 
+                    App.updateAll(); 
+                    UI.showToast("Cotação atualizada."); 
+                }
+            }
+            if(btnDiv) {
+                const id = parseInt(btnDiv.dataset.id);
+                const ativo = DB.getAtivos().find(a => a.id === id);
+                const val = parseFloat(prompt(`Valor do dividendo de ${ativo.ticker.toUpperCase()} (R$):`));
+                if(!isNaN(val) && val > 0) {
+                    DB.setCC(DB.getCC() + val);
+                    let t = DB.getTransacoes();
+                    t.unshift({ id: Date.now(), data: new Date().toISOString().split('T')[0], desc: `Dividendo - ${ativo.ticker}`, cat: 'Outros', valor: val, tipo: 'entrada' });
+                    DB.setTransacoes(t);
+                    App.updateAll();
+                    UI.showToast("Provento adicionado à C.C.");
+                }
+            }
+        });
     },
     render() {
         const c = document.getElementById('lista-ativos');
@@ -1174,12 +1215,12 @@ const RV = {
                     <div class="rv-row"><span class="rv-label">Posição Atual</span><span class="${varP >= 0 ? 'rv-profit' : 'rv-loss'}">${tAtu.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} (${varP.toFixed(2)}%)</span></div>
                     <div class="rv-row" style="margin-top: 10px;">
                         <input type="number" step="0.01" class="rv-input-price" id="patual-${a.id}" value="${a.precoAtual.toFixed(2)}">
-                        <button class="btn-update-price" onclick="atualizarPrecoAtivo(${a.id})"><i class="fa-solid fa-rotate-right"></i></button>
+                        <button class="btn-update-price" data-id="${a.id}"><i class="fa-solid fa-rotate-right"></i></button>
                     </div>
                 </div>
                 <div class="rv-footer">
-                    <button class="btn-action btn-delete" onclick="apagarAtivo(${a.id})"><i class="fa-solid fa-trash"></i></button>
-                    <button class="btn-dividend" onclick="receberDividendo(${a.id})"><i class="fa-solid fa-hand-holding-dollar"></i> Provento</button>
+                    <button class="btn-action btn-delete-rv" data-id="${a.id}"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn-dividend-rv btn-dividend" data-id="${a.id}"><i class="fa-solid fa-hand-holding-dollar"></i> Provento</button>
                 </div>
             </div>`;
         }).join('') : `<div class="empty-state"><p>Nenhum ativo.</p></div>`;
@@ -1366,7 +1407,7 @@ const Emprestimos = {
                     <div class="emp-body-header">
                         <h4>Controle</h4>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> <span>Copiar</span></button>
+                            <button class="btn-copy-emp" data-id="${emp.id}" title="Copiar comprovante para a área de transferência"><i class="fa-solid fa-copy"></i> <span>Copiar Recibo</span></button>
                             <button class="btn-export-emp" data-id="${emp.id}" title="Baixar comprovante de evolução em imagem"><i class="fa-solid fa-download"></i> <span>Baixar</span></button>
                             <button class="btn-delete-emp" data-id="${emp.id}"><i class="fa-solid fa-trash"></i> <span>Apagar</span></button>
                         </div>
@@ -1396,20 +1437,17 @@ const Emprestimos = {
 // ==========================================
 const App = {
     init() {
-        const authChoice = localStorage.getItem('sf_auth_choice');
-        if (!authChoice) {
-            document.getElementById('login-overlay')?.classList.remove('hidden');
-        }
-
         UI.initTheme();
         UI.initNavegacao();
-        Cloud.init(); 
         Backup.init();
         Transacoes.init();
         Dashboard.init();
         Caixinhas.init();
         RV.init();
         Emprestimos.init();
+        
+        Cloud.init(); 
+        
         this.updateAll();
     },
     updateAll() {
